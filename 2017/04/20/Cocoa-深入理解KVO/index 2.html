@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Cocoa 深入理解KVO | xiejunyi Blog</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="深入理解KVO……">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Cocoa 深入理解KVO">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2017&#x2F;04&#x2F;20&#x2F;Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="深入理解KVO……">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2018-05-26T11:27:59.000Z">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="xiejunyi Blog" type="application/atom+xml">
+  
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css" integrity="sha384-XdYbMnZ/QjLh6iI4ogqCTaIjrFk87ip+ekIjefZch0Y+PvJ8CDYtEs1ipDmPorQ+" crossorigin="anonymous">
+
+  <link rel="stylesheet" href="/css/styles.css">
+  
+
+</head>
+
+<body>
+  <nav class="navbar navbar-inverse">
+  <div class="container">
+    <!-- Brand and toggle get grouped for better mobile display -->
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#main-menu-navbar" aria-expanded="false">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      
+    </div>
+
+    <!-- Collect the nav links, forms, and other content for toggling -->
+    <div class="collapse navbar-collapse" id="main-menu-navbar">
+      <ul class="nav navbar-nav">
+        
+          <li><a class=""
+                 href="/index.html">Home</a></li>
+        
+          <li><a class=""
+                 href="/archives/">Archives</a></li>
+        
+      </ul>
+
+      <!--
+      <ul class="nav navbar-nav navbar-right">
+        
+          <li><a href="/atom.xml" title="RSS Feed"><i class="fa fa-rss"></i></a></li>
+        
+      </ul>
+      -->
+    </div><!-- /.navbar-collapse -->
+  </div><!-- /.container-fluid -->
+</nav>
+
+  <div class="container">
+    <div class="blog-header">
+  <h1 class="blog-title">xiejunyi Blog</h1>
+  
+</div>
+
+    <div class="row">
+        <div class="col-sm-8 blog-main">
+          <article id="post-Cocoa-深入理解KVO" class="article article-type-post" itemscope itemprop="blogPost">
+
+  <header class="article-header">
+    
+  
+    <h1 class="article-title" itemprop="name">
+      Cocoa 深入理解KVO
+    </h1>
+  
+
+
+  </header>
+
+  <div class="article-meta">
+    <div class="article-datetime">
+  <a href="/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" class="article-date"><time datetime="2017-04-20T04:44:52.000Z" itemprop="datePublished">2017-04-20</time></a>
+</div>
+
+    
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/iOS/">iOS</a>
+  </div>
+
+
+  </div>
+  <div class="article-inner">
+
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>深入理解KVO<br>……</p>
+<a id="more"></a>
+
+<h3 id="KVO的使用"><a href="#KVO的使用" class="headerlink" title="KVO的使用"></a>KVO的使用</h3><p><strong>要实现will/didChangeValueForKey:方法</strong></p>
+<p>被kvo的实例 实际上在运行时被调用</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">- (<span class="keyword">void</span>)willChangeValueForKey:(<span class="built_in">NSString</span> *)key;  </span><br><span class="line">- (<span class="keyword">void</span>)didChangeValueForKey:(<span class="built_in">NSString</span> *)key;</span><br></pre></td></tr></table></figure>
+<p>触发</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">- (<span class="keyword">void</span>)observeValueForKeyPath:(<span class="built_in">NSString</span> *)keyPath  </span><br><span class="line">                      ofObject:(<span class="keyword">id</span>)object  </span><br><span class="line">                        change:(<span class="built_in">NSDictionary</span> *)change  </span><br><span class="line">                       context:(<span class="keyword">void</span> *)context;</span><br></pre></td></tr></table></figure>
+<p>因此要实现KVO,需要下列条件之一即可</p>
+<ol>
+<li>实现了KVC setValue:forKey:会调用 willChangeValueForKey,didChangeValueForKey</li>
+<li>有访问器方法(KVO后,会运行时重写setter方法,添加willChangeValueForKey,didChangeValueForKey)</li>
+<li>显示调用will/didChangeValueForKey:</li>
+</ol>
+<h3 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h3><p>那系统是如何在框架层面支持 KVO的呢</p>
+<p><strong>核心</strong></p>
+<ol>
+<li>isa的改变</li>
+<li>动态创建子类</li>
+<li>替换重写setter方法</li>
+<li>重写class方法</li>
+</ol>
+<p>动态创建被观察对象的子类,重写setter方法,并且要管理一个对象的所有观察者.</p>
+<ol>
+<li><p>动态创建子类</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 子类名</span></span><br><span class="line"><span class="built_in">NSString</span> *kvoclassName = [kXJYKVOPrefix stringByAppendingString:originalclassName];</span><br><span class="line">Class <span class="keyword">class</span> = <span class="built_in">NSClassFromString</span>(kvoclassName);</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (<span class="keyword">class</span>) &#123;</span><br><span class="line"><span class="keyword">return</span> <span class="keyword">class</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// class doesn't exist yet, make it</span></span><br><span class="line">Class originalclass = object_getClass(<span class="keyword">self</span>);</span><br><span class="line">Class kvoclass = objc_allocateClassPair(originalclass, kvoclassName.UTF8String, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 获得签名</span></span><br><span class="line">Method classMethod = class_getInstanceMethod(originalclass, <span class="keyword">@selector</span>(<span class="keyword">class</span>));</span><br><span class="line"><span class="keyword">const</span> <span class="keyword">char</span> *types = method_getTypeEncoding(classMethod);</span><br><span class="line"><span class="comment">// 替换setter 实现</span></span><br><span class="line">class_addMethod(kvoClazz, <span class="keyword">@selector</span>(<span class="keyword">class</span>), (IMP)kvo_class, types);</span><br><span class="line">objc_registerClassPair(kvoclass);</span><br><span class="line"></span><br><span class="line"><span class="keyword">return</span> kvoclass;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>改变isa指针</p>
+</li>
+</ol>
+<p><strong>isa指针的作用: isa指针指向实例的类(对于这里的情况，isa指针的内容请看我的另一片博客)</strong><br>实例通过isa指针找到类,可以得到方法列表，属性列表等信息<br>当我们将isa指针指向子类时，就可以调用子类的方法，使用子类的属性等。<br>于是，调用该实例的setter方法其实是调用了子类的setter方法。</p>
+<ol start="3">
+<li><p>管理观察者<br>由于一个对象可能被多个观察者观察,所以可以用关联对象的方法来管理所有的观察者。</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">XJYObservationInfo *info = [[XJYObservationInfo alloc]initWithObserver:<span class="keyword">self</span> key:key block:block];</span><br><span class="line"><span class="comment">// 维护改KVO观察者数组</span></span><br><span class="line"><span class="built_in">NSMutableArray</span> *observers = objc_getAssociatedObject(<span class="keyword">self</span>, (__bridge <span class="keyword">const</span> <span class="keyword">void</span> *)(kXJYKVOAssociatedObservers));</span><br><span class="line"><span class="keyword">if</span> (!observers) &#123;</span><br><span class="line">observers = [<span class="built_in">NSMutableArray</span> array];</span><br><span class="line">objc_setAssociatedObject(<span class="keyword">self</span>, (__bridge <span class="keyword">const</span> <span class="keyword">void</span> *)(kXJYKVOAssociatedObservers), observers, OBJC_ASSOCIATION_RETAIN_NONATOMIC);</span><br><span class="line">&#125;</span><br><span class="line">[observers addObject:info];</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>重写class方法</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">class_addMethod(kvoClazz, <span class="keyword">@selector</span>(<span class="keyword">class</span>), (IMP)kvo_class, types);</span><br><span class="line"><span class="keyword">static</span> Class kvo_class(<span class="keyword">id</span> <span class="keyword">self</span>, SEL _cmd)</span><br><span class="line">&#123;</span><br><span class="line"><span class="keyword">return</span> class_getSuperclass(object_getClass(<span class="keyword">self</span>));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>子类 setter 的实现<br>在这个派生类中重写基类中任何被观察属性的 setter 方法。<br>派生类在被重写的 setter 方法实现真正的通知机制，就如前面手动实现键值观察那样。</p>
+</li>
+</ol>
+<h3 id="额外扩充"><a href="#额外扩充" class="headerlink" title="额外扩充"></a>额外扩充</h3><p><strong>还记得Aspects中 对于KVO的特殊处理吗，KVO改变了实例对象的isa指针,在此处 Aspects对KVO过的实例进行了特殊的处理</strong><br>Aspects:</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Probably a KVO'ed class. Swizzle in place. Also swizzle meta classes in place.</span></span><br><span class="line"><span class="keyword">else</span> <span class="keyword">if</span> (statedClass != baseClass) &#123;</span><br><span class="line"><span class="keyword">return</span> aspect_swizzleClassInPlace(baseClass);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">object.class 由于KVO重写了class方法，所以不能准确的找到类</span><br><span class="line">object_getClass()方法可以准确的找到isa指针</span><br><span class="line"></span><br><span class="line">object.class 与 object_getClass(object)进行判断 来防止KVO导致的AOP无效</span><br></pre></td></tr></table></figure>
+
+
+
+      
+    </div>
+
+    
+      
+
+    
+
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" data-id="ck3fztqen00019b36fzuj7yti" class="article-share-link">
+        <i class="fa fa-share"></i> Share
+      </a>
+      
+      
+
+    </footer>
+  </div>
+  
+    
+<ul id="article-nav" class="nav nav-pills nav-justified">
+  
+  <li role="presentation">
+    <a href="/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/" id="article-nav-older" class="article-nav-link-wrap">
+      <i class="fa fa-chevron-left pull-left"></i>
+      <span class="article-nav-link-title">理解 Objc Runtime</span>
+    </a>
+  </li>
+  
+  
+  <li role="presentation">
+    <a href="/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/" id="article-nav-newer" class="article-nav-link-wrap">
+      <span class="article-nav-link-title">Objective-C 深入理解中的消息机制和方法调用</span>
+      <i class="fa fa-chevron-right pull-right"></i>
+    </a>
+  </li>
+  
+</ul>
+
+
+  
+</article>
+
+
+
+
+        </div>
+        <div class="col-sm-3 col-sm-offset-1 blog-sidebar">
+          
+  <div class="sidebar-module sidebar-module-inset">
+  <h4>About</h4>
+  <p>手淘架构组招人 jimu.xjy@alibaba-inc.com</p>
+
+</div>
+
+
+  
+  <div class="sidebar-module">
+    <h4>Categories</h4>
+    <ul class="sidebar-module-list"><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/APM/">APM</a><span class="sidebar-module-list-count">6</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/Hook/">Hook</a><span class="sidebar-module-list-count">3</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/iOS/">iOS</a><span class="sidebar-module-list-count">7</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/">源码分析</a><span class="sidebar-module-list-count">2</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/%E7%A0%94%E5%8F%91%E6%B5%81%E7%A8%8B/">研发流程</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/%E8%AE%BE%E8%AE%A1%E6%9E%B6%E6%9E%84/">设计架构</a><span class="sidebar-module-list-count">3</span></li></ul>
+  </div>
+
+
+
+  
+
+
+  
+
+  
+  <div class="sidebar-module">
+    <h4>Archives</h4>
+    <ul class="sidebar-module-list"><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2019/10/">October 2019</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2019/09/">September 2019</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2018/09/">September 2018</a><span class="sidebar-module-list-count">2</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2018/06/">June 2018</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2018/05/">May 2018</a><span class="sidebar-module-list-count">2</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2018/04/">April 2018</a><span class="sidebar-module-list-count">3</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2018/01/">January 2018</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/12/">December 2017</a><span class="sidebar-module-list-count">2</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/11/">November 2017</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/10/">October 2017</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/09/">September 2017</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/05/">May 2017</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/04/">April 2017</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/02/">February 2017</a><span class="sidebar-module-list-count">2</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/01/">January 2017</a><span class="sidebar-module-list-count">2</span></li></ul>
+  </div>
+
+
+
+  
+  <div class="sidebar-module">
+    <h4>Recents</h4>
+    <ul class="sidebar-module-list">
+      
+        <li>
+          <a href="/2019/10/05/cocoapodsdev/">CocoaPods插件开发原理(一) CocoaPods做了啥</a>
+        </li>
+      
+        <li>
+          <a href="/2019/09/28/CrashMonitorSystem/">崩溃捕获系统的原理（一）异常信号</a>
+        </li>
+      
+        <li>
+          <a href="/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/">DWARF和符号化</a>
+        </li>
+      
+        <li>
+          <a href="/2018/09/16/CrashSymbolicateSystemDesign/">APM Crash系统</a>
+        </li>
+      
+        <li>
+          <a href="/2018/06/13/libmalloc/">libmalloc &#34;malloc&#34; 探究</a>
+        </li>
+      
+    </ul>
+  </div>
+
+
+
+        </div>
+    </div>
+  </div>
+  <footer class="blog-footer">
+  <div class="container">
+    <div id="footer-info" class="inner">
+      &copy; 2019 junyixie<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+
+  
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js" integrity="sha384-8gBf6Y4YYq7Jx97PIqmTwLPin4hxIzQw5aDmUg/DDhul9fFpbbLcLh3nTIIDJKhx" crossorigin="anonymous"></script>
+
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+
+
+
+<script src="/js/script.js"></script>
+
+</body>
+</html>
