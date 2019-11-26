@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Protocol Proxy 组件事件 | xiejunyi Blog</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="最近写的代码中，遇到了一个问题，我的需求如下：  模块A 的方法调用 需要转发给其他模块 模块A 调用转发最好能直接出语法提示 接收者 应该实现相应的方法, 要有约束性  想了一下，这样写能满足我的需要  对于模块A的事件抽象成 -&amp;gt; ModuleATrigerEvents Protocol 接收模块遵循 ModuleATrigerEvents Protocol 利用Proxy转发给多个其他">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Protocol Proxy 组件事件">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2018&#x2F;05&#x2F;04&#x2F;oapmdesign&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="最近写的代码中，遇到了一个问题，我的需求如下：  模块A 的方法调用 需要转发给其他模块 模块A 调用转发最好能直接出语法提示 接收者 应该实现相应的方法, 要有约束性  想了一下，这样写能满足我的需要  对于模块A的事件抽象成 -&amp;gt; ModuleATrigerEvents Protocol 接收模块遵循 ModuleATrigerEvents Protocol 利用Proxy转发给多个其他">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2018-05-12T14:36:33.000Z">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="xiejunyi Blog" type="application/atom+xml">
+  
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css" integrity="sha384-XdYbMnZ/QjLh6iI4ogqCTaIjrFk87ip+ekIjefZch0Y+PvJ8CDYtEs1ipDmPorQ+" crossorigin="anonymous">
+
+  <link rel="stylesheet" href="/css/styles.css">
+  
+
+</head>
+
+<body>
+  <nav class="navbar navbar-inverse">
+  <div class="container">
+    <!-- Brand and toggle get grouped for better mobile display -->
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#main-menu-navbar" aria-expanded="false">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      
+    </div>
+
+    <!-- Collect the nav links, forms, and other content for toggling -->
+    <div class="collapse navbar-collapse" id="main-menu-navbar">
+      <ul class="nav navbar-nav">
+        
+          <li><a class=""
+                 href="/index.html">Home</a></li>
+        
+          <li><a class=""
+                 href="/archives/">Archives</a></li>
+        
+      </ul>
+
+      <!--
+      <ul class="nav navbar-nav navbar-right">
+        
+          <li><a href="/atom.xml" title="RSS Feed"><i class="fa fa-rss"></i></a></li>
+        
+      </ul>
+      -->
+    </div><!-- /.navbar-collapse -->
+  </div><!-- /.container-fluid -->
+</nav>
+
+  <div class="container">
+    <div class="blog-header">
+  <h1 class="blog-title">xiejunyi Blog</h1>
+  
+</div>
+
+    <div class="row">
+        <div class="col-sm-8 blog-main">
+          <article id="post-oapmdesign" class="article article-type-post" itemscope itemprop="blogPost">
+
+  <header class="article-header">
+    
+  
+    <h1 class="article-title" itemprop="name">
+      Protocol Proxy 组件事件
+    </h1>
+  
+
+
+  </header>
+
+  <div class="article-meta">
+    <div class="article-datetime">
+  <a href="/2018/05/04/oapmdesign/" class="article-date"><time datetime="2018-05-04T07:23:52.000Z" itemprop="datePublished">2018-05-04</time></a>
+</div>
+
+    
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E8%AE%BE%E8%AE%A1%E6%9E%B6%E6%9E%84/">设计架构</a>
+  </div>
+
+
+  </div>
+  <div class="article-inner">
+
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p><strong>最近写的代码中，遇到了一个问题，我的需求如下：</strong></p>
+<ol>
+<li>模块A 的方法调用 需要转发给其他模块</li>
+<li>模块A 调用转发最好能直接出语法提示</li>
+<li>接收者 应该实现相应的方法, 要有约束性</li>
+</ol>
+<p>想了一下，这样写能满足我的需要</p>
+<ol>
+<li>对于模块A的事件抽象成 -&gt; ModuleATrigerEvents Protocol</li>
+<li>接收模块遵循 ModuleATrigerEvents Protocol</li>
+<li>利用Proxy转发给多个其他模块</li>
+</ol>
+<h2 id="Proxy转发"><a href="#Proxy转发" class="headerlink" title="Proxy转发"></a>Proxy转发</h2><p><strong>怎么出语法提示?</strong><br>Proxy也遵循 ModuleATrigerEvents 协议,但不实现，从编译器角度，提供了语法提示。从抽象的角度，Proxy遵循协议对外表示了他转发的能力(虽然OC runtime可以随便转…)。</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">@interface</span> <span class="title">OAPMModuleEventTriger</span> : <span class="title">NSProxy</span>&lt;<span class="title">OAPMCPUEventListenerProtocol</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>多转发</strong><br>通过Invocation让多个对象可以调用方法</p>
+<p>我们转发方法肯定是发给那些有相应实现的模块，所以 <code>-respondsToSelector:</code> 可以保证这一点。</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">- (<span class="built_in">NSMethodSignature</span> *)methodSignatureForSelector:(SEL)sel &#123;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">id</span> target <span class="keyword">in</span> _targets) &#123;</span><br><span class="line">    <span class="keyword">if</span> ([target respondsToSelector:sel]) &#123;</span><br><span class="line">      <span class="keyword">return</span> [target methodSignatureForSelector:sel];</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> [<span class="built_in">NSMethodSignature</span> signatureWithObjCTypes:<span class="string">"v@:@"</span>];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>return [NSMethodSignature signatureWithObjCTypes:&quot;v@:@&quot;]</code> 为了防止 methodsignature 为 nil 的情况。这个东西也用不到，因为 <code>-forwardInvocation:</code> 也会做<code>-respondsToSelector:</code>的判断。</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">- (<span class="keyword">void</span>)forwardInvocation:(<span class="built_in">NSInvocation</span> *)invocation &#123;</span><br><span class="line">  SEL sel = invocation.selector;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">id</span> target <span class="keyword">in</span> _targets) &#123;</span><br><span class="line">    <span class="keyword">if</span> ([target respondsToSelector:sel]) &#123;</span><br><span class="line">      <span class="built_in">dispatch_async</span>(dispatch_get_global_queue(<span class="number">0</span>, <span class="number">0</span>), ^&#123;</span><br><span class="line">        [invocation invokeWithTarget:target];</span><br><span class="line">      &#125;);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="结果"><a href="#结果" class="headerlink" title="结果"></a>结果</h2><p>调用:</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[[OAPMManager shared].moduleEventTriger updateCPUNumber:@<span class="number">1</span>];</span><br></pre></td></tr></table></figure>
+
+<p>接收:</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#pragma mark - OAPMCPUEventListenerProtocol</span></span><br><span class="line">- (<span class="keyword">void</span>)updateCPUNumber:(<span class="built_in">NSNumber</span> *)number &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>因为只是在我的即将开源项目里玩玩，所以兼容性安全性都可能有问题。</p>
+
+      
+    </div>
+
+    
+      
+
+    
+
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2018/05/04/oapmdesign/" data-id="ck3g0y6z90010qy36ehj36rsg" class="article-share-link">
+        <i class="fa fa-share"></i> Share
+      </a>
+      
+      
+
+    </footer>
+  </div>
+  
+    
+<ul id="article-nav" class="nav nav-pills nav-justified">
+  
+  <li role="presentation">
+    <a href="/2018/04/15/iossymbolicate/" id="article-nav-older" class="article-nav-link-wrap">
+      <i class="fa fa-chevron-left pull-left"></i>
+      <span class="article-nav-link-title">iOS Linux下的Crash解析服务</span>
+    </a>
+  </li>
+  
+  
+  <li role="presentation">
+    <a href="/2018/05/12/fixModuleCoupling/" id="article-nav-newer" class="article-nav-link-wrap">
+      <span class="article-nav-link-title">可维护的APM架构</span>
+      <i class="fa fa-chevron-right pull-right"></i>
+    </a>
+  </li>
+  
+</ul>
+
+
+  
+</article>
+
+
+
+
+        </div>
+        <div class="col-sm-3 col-sm-offset-1 blog-sidebar">
+          
+  <div class="sidebar-module sidebar-module-inset">
+  <h4>About</h4>
+  <p>手淘架构组招人 jimu.xjy@alibaba-inc.com</p>
+
+</div>
+
+
+  
+  <div class="sidebar-module">
+    <h4>Categories</h4>
+    <ul class="sidebar-module-list"><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/APM/">APM</a><span class="sidebar-module-list-count">6</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/Hook/">Hook</a><span class="sidebar-module-list-count">3</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/iOS/">iOS</a><span class="sidebar-module-list-count">7</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/">源码分析</a><span class="sidebar-module-list-count">2</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/%E7%A0%94%E5%8F%91%E6%B5%81%E7%A8%8B/">研发流程</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/categories/%E8%AE%BE%E8%AE%A1%E6%9E%B6%E6%9E%84/">设计架构</a><span class="sidebar-module-list-count">3</span></li></ul>
+  </div>
+
+
+
+  
+
+
+  
+
+  
+  <div class="sidebar-module">
+    <h4>Archives</h4>
+    <ul class="sidebar-module-list"><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2019/10/">October 2019</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2019/09/">September 2019</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2018/09/">September 2018</a><span class="sidebar-module-list-count">2</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2018/06/">June 2018</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2018/05/">May 2018</a><span class="sidebar-module-list-count">2</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2018/04/">April 2018</a><span class="sidebar-module-list-count">3</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2018/01/">January 2018</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/12/">December 2017</a><span class="sidebar-module-list-count">2</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/11/">November 2017</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/10/">October 2017</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/09/">September 2017</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/05/">May 2017</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/04/">April 2017</a><span class="sidebar-module-list-count">1</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/02/">February 2017</a><span class="sidebar-module-list-count">2</span></li><li class="sidebar-module-list-item"><a class="sidebar-module-list-link" href="/archives/2017/01/">January 2017</a><span class="sidebar-module-list-count">2</span></li></ul>
+  </div>
+
+
+
+  
+  <div class="sidebar-module">
+    <h4>Recents</h4>
+    <ul class="sidebar-module-list">
+      
+        <li>
+          <a href="/2019/10/05/cocoapodsdev/">CocoaPods插件开发原理(一) CocoaPods做了啥</a>
+        </li>
+      
+        <li>
+          <a href="/2019/09/28/CrashMonitorSystem/">崩溃捕获系统的原理（一）异常信号</a>
+        </li>
+      
+        <li>
+          <a href="/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/">DWARF和符号化</a>
+        </li>
+      
+        <li>
+          <a href="/2018/09/16/CrashSymbolicateSystemDesign/">APM Crash系统</a>
+        </li>
+      
+        <li>
+          <a href="/2018/06/13/libmalloc/">libmalloc &#34;malloc&#34; 探究</a>
+        </li>
+      
+    </ul>
+  </div>
+
+
+
+        </div>
+    </div>
+  </div>
+  <footer class="blog-footer">
+  <div class="container">
+    <div id="footer-info" class="inner">
+      &copy; 2019 junyixie<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+
+  
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js" integrity="sha384-8gBf6Y4YYq7Jx97PIqmTwLPin4hxIzQw5aDmUg/DDhul9fFpbbLcLh3nTIIDJKhx" crossorigin="anonymous"></script>
+
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+
+
+
+<script src="/js/script.js"></script>
+
+</body>
+</html>
