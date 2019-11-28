@@ -3,16 +3,13 @@
 <head>
   <meta charset="utf-8">
   
-  <title>CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境 | xiejunyi Blog</title>
+  <title>Category: 设计架构 | xiejunyi Blog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="description" content="CocoaPods是主流的iOS工程依赖管理工具。我们在使用CocoaPods管理工程的过程中，经常面对各种定制化的需求。CocoaPods提供的插件机制可以帮助我们定制CocoaPods。随着插件的增多，管理插件也成为了蛋疼的问题…… 本片文章介绍如何利用Bundler管理项目插件。 BundlerBundler是Ruby的依赖管理工具，通过Gemfile可以指定项目依赖的ruby gems。">
-<meta property="og:type" content="article">
-<meta property="og:title" content="CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境">
-<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;11&#x2F;26&#x2F;projectpodenv&#x2F;index.html">
+  <meta property="og:type" content="website">
+<meta property="og:title" content="xiejunyi Blog">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;categories&#x2F;%E8%AE%BE%E8%AE%A1%E6%9E%B6%E6%9E%84&#x2F;index.html">
 <meta property="og:site_name" content="xiejunyi Blog">
-<meta property="og:description" content="CocoaPods是主流的iOS工程依赖管理工具。我们在使用CocoaPods管理工程的过程中，经常面对各种定制化的需求。CocoaPods提供的插件机制可以帮助我们定制CocoaPods。随着插件的增多，管理插件也成为了蛋疼的问题…… 本片文章介绍如何利用Bundler管理项目插件。 BundlerBundler是Ruby的依赖管理工具，通过Gemfile可以指定项目依赖的ruby gems。">
 <meta property="og:locale" content="en">
-<meta property="og:updated_time" content="2019-11-28T16:38:38.346Z">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternate" href="/atom.xml" title="xiejunyi Blog" type="application/atom+xml">
@@ -76,87 +73,80 @@
 
     <div class="row">
         <div class="col-sm-8 blog-main">
-          <article id="post-projectpodenv" class="article article-type-post" itemscope itemprop="blogPost">
-
-  <header class="article-header">
+          
+  
+  
+    
+    
+      
+      
+      <section class="archives-wrap">
+        <div class="archive-year-wrap">
+          <a href="/archives/2018" class="archive-year">2018</a>
+        </div>
+        <div class="archives">
+    
+    <article class="archive-article archive-type-post">
+  <header class="archive-article-header">
     
   
-    <h1 class="article-title" itemprop="name">
-      CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境
+    <h1 itemprop="name">
+      <a class="archive-article-title" href="/2018/05/12/fixModuleCoupling/">可维护的APM架构</a>
     </h1>
   
 
 
-  </header>
-
-  <div class="article-meta">
     <div class="article-datetime">
-  <a href="/2019/11/26/projectpodenv/" class="article-date"><time datetime="2019-11-26T15:41:18.000Z" itemprop="datePublished">2019-11-26</time></a>
+  <a href="/2018/05/12/fixModuleCoupling/" class="archive-article-date"><time datetime="2018-05-12T13:17:00.000Z" itemprop="datePublished">May 12th</time></a>
 </div>
 
-    
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E7%A0%94%E5%8F%91%E6%B5%81%E7%A8%8B/">研发流程</a>
-  </div>
-
-
-  </div>
-  <div class="article-inner">
-
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>CocoaPods是主流的iOS工程依赖管理工具。我们在使用CocoaPods管理工程的过程中，经常面对各种定制化的需求。CocoaPods提供的插件机制可以帮助我们定制CocoaPods。随着插件的增多，管理插件也成为了蛋疼的问题…… 本片文章介绍如何利用Bundler管理项目插件。</p>
-<h2 id="Bundler"><a href="#Bundler" class="headerlink" title="Bundler"></a>Bundler</h2><p>Bundler是Ruby的依赖管理工具，通过Gemfile可以指定项目依赖的ruby gems。通过bundle install 进行安装。bundle exec 执行。</p>
-<h3 id="Gemfile"><a href="#Gemfile" class="headerlink" title="Gemfile"></a>Gemfile</h3><p>和 podfile 挺像的,可以类比一下。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"># 指定了gem源</span><br><span class="line">source &apos;https://rubygems.org&apos; </span><br><span class="line"></span><br><span class="line"># 指定 gem 及其 版本 </span><br><span class="line">gem &apos;nokogiri&apos;</span><br><span class="line">gem &apos;rack&apos;, &apos;~&gt; 2.0.1&apos;</span><br><span class="line">gem &apos;rspec&apos;</span><br></pre></td></tr></table></figure>
-
-<h3 id="bundle-install"><a href="#bundle-install" class="headerlink" title="bundle install"></a>bundle install</h3><p>bundle install 会安装 Gemfile指定的依赖。</p>
-<h3 id="bundle-exec"><a href="#bundle-exec" class="headerlink" title="bundle exec"></a>bundle exec</h3><p>bundle exec 将会在 bundle install 依赖安装后的环境中执行 命令。</p>
-<blockquote>
-<p>This command executes the command, making all gems specified in the Gemfile(5) available to require in Ruby programs.</p>
-</blockquote>
-<p><strong>上面巴拉巴拉说了一堆，总之就是</strong></p>
-<ol>
-<li>把依赖写进 Gemfile 里</li>
-<li>bundle install 安装依赖</li>
-<li>bundle exec 在安装依赖后的环境中执行命令</li>
-</ol>
-
-      
-    </div>
-
-    
-      
-
-    
-
-    <footer class="article-footer">
-      <a data-url="http://yoursite.com/2019/11/26/projectpodenv/" data-id="ck3ixqtg9000v2z364msg3wpg" class="article-share-link">
-        <i class="fa fa-share"></i> Share
-      </a>
-      
-      
-
-    </footer>
-  </div>
-  
-    
-<ul id="article-nav" class="nav nav-pills nav-justified">
-  
-  <li role="presentation">
-    <a href="/2019/10/05/cocoapodsdev/" id="article-nav-older" class="article-nav-link-wrap">
-      <i class="fa fa-chevron-left pull-left"></i>
-      <span class="article-nav-link-title">CocoaPods插件开发原理(一) CocoaPods做了啥</span>
-    </a>
-  </li>
-  
-  
-</ul>
-
-
-  
+  </header>
 </article>
+
+  
+    
+    
+    <article class="archive-article archive-type-post">
+  <header class="archive-article-header">
+    
+  
+    <h1 itemprop="name">
+      <a class="archive-article-title" href="/2018/05/04/oapmdesign/">Protocol Proxy 组件事件</a>
+    </h1>
+  
+
+
+    <div class="article-datetime">
+  <a href="/2018/05/04/oapmdesign/" class="archive-article-date"><time datetime="2018-05-04T07:23:52.000Z" itemprop="datePublished">May 4th</time></a>
+</div>
+
+  </header>
+</article>
+
+  
+    
+    
+    <article class="archive-article archive-type-post">
+  <header class="archive-article-header">
+    
+  
+    <h1 itemprop="name">
+      <a class="archive-article-title" href="/2018/04/13/dependency/">关于架构和编码的思考</a>
+    </h1>
+  
+
+
+    <div class="article-datetime">
+  <a href="/2018/04/13/dependency/" class="archive-article-date"><time datetime="2018-04-13T05:08:46.000Z" itemprop="datePublished">April 13th</time></a>
+</div>
+
+  </header>
+</article>
+
+  
+  
+    </div></section>
+  
 
 
 
