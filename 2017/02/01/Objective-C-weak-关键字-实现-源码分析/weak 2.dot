@@ -1,4 +1,0 @@
-
-digraph weak {
-	weak_table -> weak_entries -> weak_entry_s ->referents
-}

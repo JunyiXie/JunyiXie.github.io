@@ -1,5 +1,0 @@
-digraph weakTable {
-
-    weakTable -> {entry1,entry2} 
-    entity1 -> {referrer1,referrer2,referrer3}
-}
