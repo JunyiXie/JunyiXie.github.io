@@ -11,7 +11,7 @@
 /* Globals */
 
 body {
-  font-family: Helvetica;
+  font-family: 'Monaco', Courier, monospace;
   color: #444444;
 }
 
@@ -23,7 +23,7 @@ h5, .h5,
 h6, .h6 {
   margin-top: 1em;
   margin-bottom: 15px;
-  font-family: "Futura", Helvetica, Arial, sans-serif;
+  font-family: "Monaco", Helvetica, Arial, sans-serif;
   font-weight: normal;
   color: #333;
 }
@@ -63,7 +63,7 @@ code {
  */
 
 .navbar {
-  background-color: #f55000;
+  background-color: #0394fc;
   -webkit-box-shadow: inset 0 -2px 5px rgba(0,0,0,.1);
           box-shadow: inset 0 -2px 5px rgba(0,0,0,.1);
 }
@@ -171,7 +171,7 @@ code {
 }
 .sidebar-module-inset {
   padding: 15px;
-  background-color: #ff5000;
+  background-color: #0394fc;
   color: #ffffff;
   border-radius: 4px;
 }
@@ -247,7 +247,7 @@ code {
   clear: both;
 }
 .article-footer a {
-  color: #ff5000;
+  color: #0394fc;
   text-decoration: none;
 }
 .article-footer a:hover {
