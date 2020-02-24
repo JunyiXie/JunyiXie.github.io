@@ -61,6 +61,55 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-crashruntimeinfo" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/02/19/crashruntimeinfo/" class="article-date">
+  <time datetime="2020-02-19T12:59:13.000Z" itemprop="datePublished">2020-02-19</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/02/19/crashruntimeinfo/">Block实现 文档阅读</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>记得很久很久以前。。。有本iOS开发进阶的书籍讲了block实现。通过分析clang生成的代码来反推block的原理。<br>卧槽最近搜了一下block，发现clang是有abi文档的。。。看了一下文档果然清晰许多。结合最近遇到的问题实践了一下block的知识。</p>
+<p><strong>Block ABI文档，详细的介绍了Block的构成及其内存管理相关的实现。参考这片文档。</strong><br><a href="https://clang.llvm.org/docs/Block-ABI-Apple.html" target="_blank" rel="noopener">https://clang.llvm.org/docs/Block-ABI-Apple.html</a> </p>
+<h2 id="Block数据结构"><a href="#Block数据结构" class="headerlink" title="Block数据结构"></a>Block数据结构</h2><p>通过这个数据结构，Block对外界变量的使用，Block内存管理，一目了然。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">Block_literal_1</span> &#123;</span></span><br><span class="line">    <span class="keyword">void</span> *isa; <span class="comment">// initialized to &amp;_NSConcreteStackBlock or &amp;_NSConcreteGlobalBlock</span></span><br><span class="line">    <span class="keyword">int</span> flags;</span><br><span class="line">    <span class="keyword">int</span> reserved;</span><br><span class="line">    <span class="keyword">void</span> (*invoke)(<span class="keyword">void</span> *, ...);</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">Block_descriptor_1</span> &#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">int</span> reserved;         <span class="comment">// NULL</span></span><br><span class="line">        <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">int</span> <span class="built_in">size</span>;         <span class="comment">// sizeof(struct Block_literal_1)</span></span><br><span class="line">        <span class="comment">// optional helper functions</span></span><br><span class="line">        <span class="keyword">void</span> (*copy_helper)(<span class="keyword">void</span> *dst, <span class="keyword">void</span> *src);     <span class="comment">// IFF (1&lt;&lt;25)</span></span><br><span class="line">        <span class="keyword">void</span> (*dispose_helper)(<span class="keyword">void</span> *src);             <span class="comment">// IFF (1&lt;&lt;25)</span></span><br><span class="line">        <span class="comment">// required ABI.2010.3.16</span></span><br><span class="line">        <span class="keyword">const</span> <span class="keyword">char</span> *signature;                         <span class="comment">// IFF (1&lt;&lt;30)</span></span><br><span class="line">    &#125; *descriptor;</span><br><span class="line">    <span class="comment">// imported variables</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">// 引用</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">Block_byref_foo</span> &#123;</span></span><br><span class="line">        <span class="keyword">void</span> *isa;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> _<span class="title">block_byref_foo</span> *<span class="title">forwarding</span>;</span></span><br><span class="line">        <span class="keyword">int</span> flags;   <span class="comment">//refcount;</span></span><br><span class="line">        <span class="keyword">int</span> <span class="built_in">size</span>;</span><br><span class="line">        <span class="comment">// helper functions called via Block_copy() and Block_release()</span></span><br><span class="line">        <span class="keyword">void</span> (*byref_keep)(<span class="keyword">void</span>  *dst, <span class="keyword">void</span> *src);</span><br><span class="line">        <span class="keyword">void</span> (*byref_dispose)(<span class="keyword">void</span> *);</span><br><span class="line">        typeof(marked_variable) marked_variable;</span><br><span class="line">    &#125; *byref_foo;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 常量拷贝</span></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">int</span> x;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> __<span class="title">block_literal_3</span> *<span class="title">const</span> <span class="title">existingBlock</span>;</span></span><br><span class="line">    ...</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h2 id="利用Block的布局定位Crash"><a href="#利用Block的布局定位Crash" class="headerlink" title="利用Block的布局定位Crash"></a>利用Block的布局定位Crash</h2><p>最近看同事解决一个crash, 挂在了_Block_release，并且没有相关的app调用栈。针对这种crash，如果不去拿到block的信息，是没法定位的。这个问题最后是通过手动复现+调试去解决的。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Thread 0 Crashed:</span><br><span class="line">0   libobjc.A.dylib                 0x000000018879c140 _objc_release :16 (in libobjc.A.dylib)</span><br><span class="line">1   libsystem_blocks.dylib          0x000000018864da48 _Block_release :152 (in libsystem_blocks.dylib)</span><br><span class="line">2   libsystem_blocks.dylib          0x000000018864da48 _Block_release :152 (in libsystem_blocks.dylib)</span><br></pre></td></tr></table></figure>
+
+<p>在crash崩溃的时候，其实是可以尝试对崩溃现场使用到的相关内存进行数据解析，获取有用的信息。kscrash 包含对对象的数据解析，但是并没有block。这片文章就看一下block的实现原理，然后进行解析。</p>
+<p>非常简单，block的函数实现地址 保存在了结构体内的 invoke 变量。取出地址，再符号化就可以对应出代码行了。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 定义block结构，方便取值，这个参考ABI。</span></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">fake_block_literal</span> &#123;</span></span><br><span class="line">    <span class="keyword">void</span> *isa; </span><br><span class="line">    <span class="keyword">int</span> flags;</span><br><span class="line">    <span class="keyword">int</span> reserved;</span><br><span class="line">    <span class="keyword">void</span> (*invoke)(struct fake_block_literal *); <span class="comment">// 调用地址</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">fake_block_descriptor</span> *<span class="title">descriptor</span>;</span></span><br><span class="line">&#125; fake_block_literal;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">fake_block_descriptor</span> &#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">int</span> reserved;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">int</span> Block_size;</span><br><span class="line">    <span class="keyword">void</span> (*copy_helper)(struct fake_block_literal *dst, struct fake_block_literal *src);</span><br><span class="line">    <span class="keyword">void</span> (*dispose_helper)(struct fake_block_literal *);</span><br><span class="line">&#125; fake_block_descriptor;</span><br><span class="line"></span><br><span class="line">fake_block_literal *block_literal = (__bridge fake_block_literal *)address;</span><br></pre></td></tr></table></figure>
+
+<h2 id="结束语"><a href="#结束语" class="headerlink" title="结束语"></a>结束语</h2><p>ARC,Block这种通过编译器和运行时一起完成的语言feature，通过编译器文档进行学习是快速理解原理的好办法。<br>下周，看看ARC的实现。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2020/02/19/crashruntimeinfo/" data-id="ck708fktx00005pjfbqwsg31q" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+</article>
+
+
+  
     <article id="post-iosdevdebug" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/02/12/iosdevdebug/" class="article-date">
@@ -160,7 +209,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/02/12/iosdevdebug/" data-id="ck6j1eplb000w63jgfe5b5ve5" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/02/12/iosdevdebug/" data-id="ck6umce61000thfjg2h36bk0m" class="article-share-link">Share</a>
       
       
     </footer>
@@ -216,7 +265,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2019/11/26/projectpodenv/" data-id="ck6j1epll001m63jg7iq03q13" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2019/11/26/projectpodenv/" data-id="ck6umce650011hfjg3lasbfb1" class="article-share-link">Share</a>
       
       
     </footer>
@@ -294,7 +343,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2019/10/05/cocoapodsdev/" data-id="ck6j1epla000t63jg16sf9qwf" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2019/10/05/cocoapodsdev/" data-id="ck6umce5q000fhfjgfnat032p" class="article-share-link">Share</a>
       
       
     </footer>
@@ -392,7 +441,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2019/09/28/CrashMonitorSystem/" data-id="ck6j1epkr000763jgd5ss9reu" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2019/09/28/CrashMonitorSystem/" data-id="ck6umce5n000ahfjg4crndxar" class="article-share-link">Share</a>
       
       
     </footer>
@@ -464,7 +513,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" data-id="ck6j1epl3000g63jggyet3e34" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" data-id="ck6umce5s000ihfjgb213do3s" class="article-share-link">Share</a>
       
       
     </footer>
@@ -541,7 +590,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/09/16/CrashSymbolicateSystemDesign/" data-id="ck6j1epkl000263jgfjyvde1h" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/09/16/CrashSymbolicateSystemDesign/" data-id="ck6umce5a0002hfjgca429h5m" class="article-share-link">Share</a>
       
       
     </footer>
@@ -613,7 +662,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/06/13/libmalloc/" data-id="ck6j1eplj001f63jgc7rrhlxh" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/06/13/libmalloc/" data-id="ck6umce63000yhfjg728a9fmm" class="article-share-link">Share</a>
       
       
     </footer>
@@ -717,7 +766,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/04/13/dependency/" data-id="ck6j1eplc000z63jg46gfd0zb" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/04/13/dependency/" data-id="ck6umce5z000ohfjgc0ondyl6" class="article-share-link">Share</a>
       
       
     </footer>
@@ -811,68 +860,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/04/10/iosoom/" data-id="ck6j1eplg001963jg8j8wej83" class="article-share-link">Share</a>
-      
-      
-    </footer>
-  </div>
-  
-</article>
-
-
-  
-    <article id="post-sharedlibraryandpic" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/01/15/sharedlibraryandpic/" class="article-date">
-  <time datetime="2018-01-14T16:35:39.000Z" itemprop="datePublished">2018-01-15</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/Hook/">Hook</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/01/15/sharedlibraryandpic/">fishhook与共享库和PIC</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>fishhook是不能hook同一个library内的符号调用的，在某个issus的解答如下。</p>
-<blockquote>
-<p>People have had issues with socket and/or connect in the past. One problem is that fishhook can only hook external calls, which means function calls within the same library generally cannot be hooked. In this case, calls to socket and connect from within the same library (libSystem) cannot be hooked. With the simulator, the system libraries are broken out into many sub-libraries, including libsystem_networking. With many sub-libraries, this means function calls from one sub-library to another can be hooked on the simulator, but on device where there’s just a single libSystem, those same calls are within the same library and cannot be hooked.</p>
-</blockquote>
-<p>这是由于fishhook利用 Macho-O dyld link 的 dynamically rebinding symbols实现所导致的。</p>
-<p>这边文章就围绕这个话题来展开，解释一下la_symbol_ptr存在的原因。由于Mac OS 上使用 stubs, la_symbol_ptrs, stub_helper来实现延迟绑定的原理和Linux ELF差不多，这里就使用ELF的实现来解释。</p>
-<h2 id="PIC位置无关代码的引入"><a href="#PIC位置无关代码的引入" class="headerlink" title="PIC位置无关代码的引入"></a>PIC位置无关代码的引入</h2><p>设想一个场景，因为Linux/Mac os使用的是虚拟内存系统，这意味着共享库引用的外部符号地址在不同进程的虚拟内存中是不同的，对应到物理内存中TEXT段也不同，所以必须拷贝多份。这显然是不可以接受的，内存中存在了大量拷贝，浪费RAM资源。</p>
-<p>如果我们共享库对外部引用是位置无关的就好了，就不会存在这个问题。</p>
-<h3 id="GOT-全局偏移表"><a href="#GOT-全局偏移表" class="headerlink" title="GOT 全局偏移表"></a>GOT 全局偏移表</h3><p>这时利用DATA段读写的特性，DATA段会在内存中有多份拷贝，并且DATA段和TEXT段的距离不变，在DATA段存储变化的地址，TEXT段使用指向DATA段对应位置的引用。这就解决了TEXT段共享的问题。这里我们引入了一个全局偏移量表，GOT。动态链接器会重定位GOT中的每个条目，使得它包含正确的绝对地址。</p>
-<h3 id="PIC函数调用-和-PLT过程链接表"><a href="#PIC函数调用-和-PLT过程链接表" class="headerlink" title="PIC函数调用 和 PLT过程链接表"></a>PIC函数调用 和 PLT过程链接表</h3><p>使用GOT这种方式，我们每次调用函数都需要额外的三条指令</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">        call L1</span><br><span class="line">L1:   popl %ebx </span><br><span class="line">        addl $PROCOFF, %ebx</span><br><span class="line">        call *(%ebx)</span><br></pre></td></tr></table></figure>
-<ol>
-<li>将PC的值移到 ebx中</li>
-<li>ebx 指向GOT中适当的条目</li>
-</ol>
-<p>这样的效率未免有些低。于是引入了 延迟绑定的技术，将过程地址的绑定推迟到第一次调用该过程时。第一次调用过程的运行时开销很大，但是其后的每次调用都只会花费一条指令和一个间接地存储器引用。</p>
-<p><strong>过程</strong></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">call 8048464</span><br></pre></td></tr></table></figure>
-<p>调用相应的PLT条目</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">jmp *0x8049684</span><br><span class="line">pushl $0x8</span><br><span class="line">jmp 8048444</span><br></pre></td></tr></table></figure>
-<p>跳转到addvec</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/01/15/sharedlibraryandpic/" data-id="ck6j1epln001q63jg7hot073k" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/04/10/iosoom/" data-id="ck6umce640010hfjgc1sx95wi" class="article-share-link">Share</a>
       
       
     </footer>
@@ -886,7 +874,7 @@
 
   <nav id="page-nav">
     
-    <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><a class="extend next" rel="next" href="/page/2/">Next &amp;raquo;</a>
+    <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><a class="page-number" href="/page/3/">3</a><a class="extend next" rel="next" href="/page/2/">Next &amp;raquo;</a>
   </nav>
 
 </section>
@@ -925,6 +913,10 @@
       <ul>
         
           <li>
+            <a href="/2020/02/19/crashruntimeinfo/">Block实现 文档阅读</a>
+          </li>
+        
+          <li>
             <a href="/2020/02/12/iosdevdebug/">iOS开发必备的问题定位调试技巧</a>
           </li>
         
@@ -938,10 +930,6 @@
         
           <li>
             <a href="/2019/09/28/CrashMonitorSystem/">崩溃捕获系统的原理（一）异常信号</a>
-          </li>
-        
-          <li>
-            <a href="/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/">DWARF和符号化</a>
           </li>
         
       </ul>
