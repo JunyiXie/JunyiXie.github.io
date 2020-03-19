@@ -61,6 +61,89 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-cocoapods-new-feature" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/03/19/cocoapods-new-feature/" class="article-date">
+  <time datetime="2020-03-19T12:21:19.000Z" itemprop="datePublished">2020-03-19</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/03/19/cocoapods-new-feature/">cocoapods 新feature 开发 Example, On Demand Resource</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>2016年 苹果提出了On Demand Resource这一特性。目的在于下载游戏等资源减少包大小。<br>不过CocoaPods尚未对该特性进行支持，这导致我们不能在Pod中使用On Demand Resource。对于组件化开发的app来说，没有这一功能的支持，基本无法使用On Demand Resource。</p>
+<p>因此针对CocoaPods开发了在 podspec 中 定义 on_demand_resources 字段，支持pod仓库使用On Demand Resource。</p>
+<p>例如这样</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">s.on_demand_resources  = [<span class="string">"Fuck"</span>, <span class="string">"You"</span>]</span><br></pre></td></tr></table></figure>
+
+<h2 id="Feature-实现思路"><a href="#Feature-实现思路" class="headerlink" title="Feature 实现思路"></a>Feature 实现思路</h2><p>我们做的操作就是 用代码实现 在Xcode 中手动添加 On Demand Resource 的效果。</p>
+<ol>
+<li>拖一个文件进工程</li>
+<li>在Resource Tag 设置中添加该文件</li>
+</ol>
+<p>通过git diff, 我们可以发现对Xcode工程文件的改动在于：</p>
+<ol>
+<li>添加文件 PBXBuildFile PBXFileReference ，并打上tag</li>
+<li>新增 project 的 KnownAssetTags Attributed</li>
+<li>添加 该文件到 ResourcesBuildPhase</li>
+</ol>
+<p>我们只需要操作CocoaPods帮我们完成这些就搞定。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Begin PBXBuildFile section */</span></span><br><span class="line"><span class="number">569293632420B</span>FAA00E13D4A <span class="comment">/* R1 in Resources */</span> = &#123;isa = PBXBuildFile; fileRef = <span class="number">569293622420B</span>FAA00E13D4A <span class="comment">/* R1 */</span>; settings = &#123;ASSET_TAGS = (OnDemand, ); &#125;; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* Begin PBXFileReference section */</span></span><br><span class="line"><span class="number">569293622420B</span>FAA00E13D4A <span class="comment">/* R1 */</span> = &#123;isa = PBXFileReference; fileEncoding = <span class="number">4</span>; lastKnownFileType = <span class="built_in">text</span>; path = R1; sourceTree = <span class="string">"&lt;group&gt;"</span>; &#125;;</span><br><span class="line">A927A3B416DCDE828F76E9A4 <span class="comment">/* fuck */</span> = &#123;isa = PBXFileReference; includeInIndex = <span class="number">1</span>; lastKnownFileType = <span class="built_in">text</span>; name = fuck; path = <span class="string">"../../CocoaPodsTestLibrary-master/fuck"</span>; sourceTree = <span class="string">"&lt;group&gt;"</span>; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* Begin PBXProject section */</span></span><br><span class="line">	<span class="number">5692933E2420</span>BEDF00E13D4A <span class="comment">/* Project object */</span> = &#123;</span><br><span class="line">		isa = PBXProject;</span><br><span class="line">		attributes = &#123;</span><br><span class="line">			KnownAssetTags = (</span><br><span class="line">				OnDemand,</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="comment">/* Begin PBXResourcesBuildPhase section */</span></span><br><span class="line">	<span class="number">569293442420B</span>EDF00E13D4A <span class="comment">/* Resources */</span> = &#123;</span><br><span class="line">		isa = PBXResourcesBuildPhase;</span><br><span class="line">		buildActionMask = <span class="number">2147483647</span>;</span><br><span class="line">		files = (</span><br><span class="line">			<span class="number">569293632420B</span>FAA00E13D4A <span class="comment">/* R1 in Resources */</span>,</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><p>哈哈 像我这种Command Copy Paste 高手，做需求靠抄就行了。<br>首先确定要抄什么！ </p>
+<ul>
+<li>on_demand_resources 的 语法看起来和 resources 有点像。。 podspec 的 dsl 就抄他怎么实现的。抄他！</li>
+<li>文件添加到工程和 cocoapods将 xcconfig 添加到工程里比较像，抄他！！</li>
+<li>文件添加到build phase 并且打标签 和 添加资源文件比较像，抄他！！！</li>
+</ul>
+<p>一般iOS开发基本不会熟悉CocoaPods的源码，又是Ruby写的… 如何调试看一下我以前的文章。如何分析调试工程也参考我之前的文章。</p>
+<h3 id="新增Podspec-DSL"><a href="#新增Podspec-DSL" class="headerlink" title="新增Podspec DSL"></a>新增Podspec DSL</h3><p>我找了一个类似新增podspec语法的 pull request, 大致知道了新增语法该该什么。</p>
+<ol>
+<li>dsl.rb </li>
+<li>linter.rb </li>
+<li>specification.rb </li>
+</ol>
+<p>首先要定位到CocoaPods中对 podspec 的处理流程，我直接写个错误的语法，通过报错的调用栈定位到了位置。</p>
+<p>发现CocoaPods 将 Podspec中的内容 当作Ruby代码去执行 (ruby 的 eval)。知道了这个，就很容易摸清楚 podspec dsl 如何实现的了, 可以直接调试。通过调试，发现dsl的定义在 Core/lib/specification/dsl.rb中定义的。OK照葫芦画瓢，复制粘贴一下 resource 的 抄上…</p>
+<p>dsl 定义</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># @!method on_demand_resources=(on_demand_resources)</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   A list of on_demand_resources that should be copied into the target bundle.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   <span class="doctag">@example</span></span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#     spec.on_demand_resources = 'Resources/HockeySDK.bundle'</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   <span class="doctag">@example</span></span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#     spec.on_demand_resources = ['Images/*.png', 'Sounds/*']</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   <span class="doctag">@param</span>  [String, Array&lt;String&gt;] resources</span></span><br><span class="line"><span class="comment">#           The on_demand_resources shipped with the Pod.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line">attribute <span class="symbol">:on_demand_resources</span>,</span><br><span class="line">          <span class="symbol">:container</span>     =&gt; Array,</span><br><span class="line">          <span class="symbol">:file_patterns</span> =&gt; <span class="literal">true</span>,</span><br><span class="line">          <span class="symbol">:singularize</span>   =&gt; <span class="literal">true</span></span><br></pre></td></tr></table></figure>
+
+<p>podspec 数据消费和lint</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># <span class="doctag">@return</span> [Array&lt;String&gt;] A hash where the key represents the</span></span><br><span class="line"><span class="comment">#         paths of the on_demand_resources to copy and the values the paths of</span></span><br><span class="line"><span class="comment">#         the on_demand_resources that should be copied.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line">spec_attr_accessor <span class="symbol">:on_demand_resources</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Performs validations related to the `on_demand_resources` attribute.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">_validate_on_demand_resources</span><span class="params">(on_demand_resource)</span></span></span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="添加-On-Demand-Resource-文件"><a href="#添加-On-Demand-Resource-文件" class="headerlink" title="添加 On Demand Resource 文件"></a>添加 On Demand Resource 文件</h3><p>哎，通过调试，找到了 cocoapods 集成Pods 到 Xcode Target 的关键文件。<code>lib/cocoapods/installer/user_project_integrator/target_integrator.rb</code>。 之后的操作又是通过调试和代码分析找到类似的功能如何实现，去理解CocoaPods的整个架构，再来实现我们的功能。<br>CocoaPods的设计确实十分优秀，改的很爽。</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Integrates the targets of the user projects with the on demand resources</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@return</span> [void]</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">add_on_demand_resources</span></span></span><br><span class="line">    attributes = target.user_project.root_object.attributes</span><br><span class="line">    asset_tags = (attributes[<span class="string">"KnownAssetTags"</span>] <span class="params">||</span>= [])</span><br><span class="line"></span><br><span class="line">    <span class="keyword">unless</span> asset_tags.<span class="keyword">include</span>?(<span class="string">"OnDemand"</span>)</span><br><span class="line">    asset_tags &lt;&lt; <span class="string">"OnDemand"</span></span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    attributes[<span class="string">"KnownAssetTags"</span>] = asset_tags</span><br><span class="line">    target.user_project.root_object.attributes = attributes</span><br><span class="line"></span><br><span class="line">    on_demand_resources_group = target.user_project.main_group[<span class="string">"on_demand_resources"</span>]</span><br><span class="line">    <span class="keyword">unless</span> on_demand_resources_group</span><br><span class="line">    on_demand_resources_group = target.user_project.main_group.new_group(<span class="string">"on_demand_resources"</span>, target.sandbox.root)</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    pb_target = target.user_project.objects_by_uuid[target.user_target_uuids[<span class="number">0</span>]]</span><br><span class="line"></span><br><span class="line">    old_on_demand_resource_file_refs = on_demand_resources_group.files</span><br><span class="line">    pb_target.remove_on_demand_resources(old_on_demand_resource_file_refs)</span><br><span class="line">    on_demand_resources_group.clear</span><br><span class="line"></span><br><span class="line">    on_demand_resource_file_refs = []</span><br><span class="line"></span><br><span class="line">    target.pod_targets.each <span class="keyword">do</span> <span class="params">|pod_target|</span></span><br><span class="line">    pod_target.file_accessors.each &#123;<span class="params">|file_accessor|</span></span><br><span class="line">        file_accessor.on_demand_resources.each &#123;<span class="params">|on_demand_resource|</span></span><br><span class="line">        on_demand_resource_pathname = Pathname.new(File.expand_path(on_demand_resource))</span><br><span class="line"></span><br><span class="line">        file_ref = on_demand_resources_group.files.find &#123;<span class="params">|file|</span> file.real_path == on_demand_resource_pathname&#125;</span><br><span class="line">        <span class="keyword">unless</span> file_ref</span><br><span class="line">            file_ref = on_demand_resources_group.new_file(on_demand_resource)</span><br><span class="line">            on_demand_resource_file_refs &lt;&lt; file_ref</span><br><span class="line">        <span class="keyword">end</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    pb_target.add_on_demand_resources(on_demand_resource_file_refs)</span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<p><code>lib/xcodeproj/project/object/native_target.rb</code></p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># remove on demand resource files to the resources build phase of the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@param</span>  [Array&lt;PBXFileReference&gt;] on_demand_resource_file_references</span></span><br><span class="line"><span class="comment">#         the files references of the on demand resources to the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@return</span> [void]</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">remove_on_demand_resources</span><span class="params">(on_demand_resource_file_references)</span></span></span><br><span class="line">    on_demand_resource_file_references.each <span class="keyword">do</span> <span class="params">|file|</span></span><br><span class="line">    resources_build_phase.remove_file_reference(file)</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Adds on demand resource files to the resources build phase of the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@param</span>  [Array&lt;PBXFileReference&gt;] on_demand_resource_file_references</span></span><br><span class="line"><span class="comment">#         the files references of the on demand resources to the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@return</span> [void]</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">add_on_demand_resources</span><span class="params">(on_demand_resource_file_references)</span></span></span><br><span class="line">    on_demand_resource_file_references.each <span class="keyword">do</span> <span class="params">|file|</span></span><br><span class="line">    <span class="keyword">next</span> <span class="keyword">if</span> resources_build_phase.<span class="keyword">include</span>?(file)</span><br><span class="line">    build_file = project.new(PBXBuildFile)</span><br><span class="line">    build_file.file_ref = file</span><br><span class="line">    build_file.settings = (build_file.settings <span class="params">||</span>= &#123;&#125;).merge(&#123;<span class="string">"ASSET_TAGS"</span> =&gt; [<span class="string">"OnDemand"</span>]&#125;)</span><br><span class="line">    resources_build_phase.files &lt;&lt; build_file</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="分析阅读CocoaPods源码的几个关键名词"><a href="#分析阅读CocoaPods源码的几个关键名词" class="headerlink" title="分析阅读CocoaPods源码的几个关键名词"></a>分析阅读CocoaPods源码的几个关键名词</h3><p>PodTarget pod的target<br>AggregateTarget 需要集成pod的项目的target，例如我们app的target<br>Sandbox CocoaPods对于 我们Pods 和 工程的 沙盒文件处理<br>DSL podfile podspec中定义的语法<br>defind_method CocoaPods 通过动态生成方法的方式，处理简单的语法</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2020/03/19/cocoapods-new-feature/" data-id="ck7yqfumf000a2fjhefgu30rl" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+</article>
+
+
+  
     <article id="post-lazybind" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/03/04/lazybind/" class="article-date">
@@ -119,7 +202,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/03/04/lazybind/" data-id="ck7dmg7w5000v8vjibcuvfuy5" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/03/04/lazybind/" data-id="ck7yqfumx000y2fjhg6s830m7" class="article-share-link">Share</a>
       
       
     </footer>
@@ -156,79 +239,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/03/03/macholinkedit/" data-id="ck7dmg7w7000z8vji87605xyh" class="article-share-link">Share</a>
-      
-      
-    </footer>
-  </div>
-  
-</article>
-
-
-  
-    <article id="post-thread" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2020/02/25/thread/" class="article-date">
-  <time datetime="2020-02-25T08:04:07.000Z" itemprop="datePublished">2020-02-25</time>
-</a>
-    
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2020/02/25/thread/">线程对App性能的影响</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <h1 id="Building-Responsive-and-Efficient-Apps-with-GCD-2015-718"><a href="#Building-Responsive-and-Efficient-Apps-with-GCD-2015-718" class="headerlink" title="Building Responsive and Efficient Apps with GCD 2015 - 718"></a>Building Responsive and Efficient Apps with GCD 2015 - 718</h1><ol>
-<li><p>Queue Block Qos 具体的规则 看一看</p>
-</li>
-<li><p>Asynchronous Priority Inversion resolved automatically</p>
-<ul>
-<li><p>High QoS Block submitted to serial queue</p>
-</li>
-<li><p>Queue already contains Blocks with lower QoS </p>
-</li>
-<li><p>QoS is raised until high QoS Block is reached</p>
-</li>
-</ul>
-</li>
-<li><p>Queues as Locks</p>
-</li>
-<li><p>Synchronous Priority Inversion resolved automatically</p>
-<ul>
-<li>dispatch_sync() and dispatch_block_wait() of Blocks on serial queues</li>
-<li>pthread_mutex_lock() nslook …</li>
-</ul>
-</li>
-<li><p>Queue Versus Runloop</p>
-<ul>
-<li>The Main Thread’s Run Loop is also exposed as the Main Queue</li>
-</ul>
-</li>
-<li><p>Thread Explosion </p>
-<ul>
-<li>Thread Explosion Causing Deadlock.<ul>
-<li>main thread: for (int i = 0; i &lt; 999; i++) dispatch_async(q,^{…}) {dispatch_sync(dispatch_get_main_queue(),^{…})}</li>
-<li>main thread: dispatch_sync(q,^{…})</li>
-</ul>
-</li>
-</ul>
-</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/02/25/thread/" data-id="ck7dmg7wa00188vjietzlgv2c" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/03/03/macholinkedit/" data-id="ck7yqfumw000w2fjhbhuz3x1h" class="article-share-link">Share</a>
       
       
     </footer>
@@ -277,7 +288,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/02/19/crashruntimeinfo/" data-id="ck7dmg7vp000d8vjibqefhrah" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/02/19/crashruntimeinfo/" data-id="ck7yqfumi000i2fjhhw8q8wsz" class="article-share-link">Share</a>
       
       
     </footer>
@@ -386,7 +397,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/02/12/iosdevdebug/" data-id="ck7dmg7vy000q8vji1k3rff5j" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/02/12/iosdevdebug/" data-id="ck7yqfums000r2fjh69hj9d4z" class="article-share-link">Share</a>
       
       
     </footer>
@@ -442,7 +453,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2019/11/26/projectpodenv/" data-id="ck7dmg7w700118vji3i6900a2" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2019/11/26/projectpodenv/" data-id="ck7yqfumz00132fjhdtlc0tvc" class="article-share-link">Share</a>
       
       
     </footer>
@@ -520,7 +531,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2019/10/05/cocoapodsdev/" data-id="ck7dmg7vm000c8vjihqz77grg" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2019/10/05/cocoapodsdev/" data-id="ck7yqfumg000d2fjh2007a858" class="article-share-link">Share</a>
       
       
     </footer>
@@ -618,7 +629,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2019/09/28/CrashMonitorSystem/" data-id="ck7dmg7vh00048vjiagft76po" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2019/09/28/CrashMonitorSystem/" data-id="ck7yqfumc00072fjhaqbcg50e" class="article-share-link">Share</a>
       
       
     </footer>
@@ -690,7 +701,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" data-id="ck7dmg7vs000i8vji2n7a2vqg" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" data-id="ck7yqfumj000j2fjh5s5rdc73" class="article-share-link">Share</a>
       
       
     </footer>
@@ -767,7 +778,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/09/16/CrashSymbolicateSystemDesign/" data-id="ck7dmg7vi00058vji237g9o40" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/09/16/CrashSymbolicateSystemDesign/" data-id="ck7yqfuly00022fjh8bmj31qw" class="article-share-link">Share</a>
       
       
     </footer>
@@ -820,15 +831,15 @@
       <ul>
         
           <li>
+            <a href="/2020/03/19/cocoapods-new-feature/">cocoapods 新feature 开发 Example, On Demand Resource</a>
+          </li>
+        
+          <li>
             <a href="/2020/03/04/lazybind/">dyld(2) lazy bind 和 dyld_stub_binder</a>
           </li>
         
           <li>
             <a href="/2020/03/03/macholinkedit/">dyld(1) MachO Linkedit 段</a>
-          </li>
-        
-          <li>
-            <a href="/2020/02/25/thread/">线程对App性能的影响</a>
           </li>
         
           <li>
