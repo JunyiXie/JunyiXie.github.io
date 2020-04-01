@@ -61,6 +61,155 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-dwarf和符号化" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" class="article-date">
+  <time datetime="2018-09-30T08:21:07.000Z" itemprop="datePublished">2018-09-30</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/APM/">APM</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/">DWARF和符号化</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h2 id="DWARF-格式简介"><a href="#DWARF-格式简介" class="headerlink" title="DWARF 格式简介"></a>DWARF 格式简介</h2><p>DWARF: 它是可执行程序与源代码关系的一个紧凑的表示.</p>
+<p>大多数现代编程语言是块结构的：每个实体（例如，一个类定义或一个函数）被包含在另一个实体中。在一个C程序里，每个文件可能包含多个数据定义、多个变量定义，及多个函数。DWARF遵循这个模型，它也是块结构的。在DWARF里基本的描述项是调试信息项（DebuggingInformation Entry——DIE）。一个DIE有一个标签，它指明了这个DIE描述什么及一个填入了细节并进一步描述该项的属性列表。一个DIE（除了最顶层的）被一个父DIE包含（或者说拥有），并可能有兄弟DIE或子DIE。属性可能包含各种值：常量（比如一个函数名），变量（比如一个函数的起始地址），或对另一个DIE的引用（比如一个函数的返回值类型）。</p>
+<h2 id="利用DWARF符号化"><a href="#利用DWARF符号化" class="headerlink" title="利用DWARF符号化"></a>利用DWARF符号化</h2><p>符号化地址，我们期望的结果是，获取地址对应的函数名称和调用行数等信息。DWARF调试格式中携带了大量信息，当然包括函数名称和地址。因此如果我们提供的调用地址能在函数中找到信息，优先使用DWARF中的符号信息进行符号化。</p>
+<p>在 DWARF 中，这些信息主要由 DW_AT_subprogram 和 line table 承载。<br>我们只需要根据地址在 DWARF 文件中找到对应的 信息。</p>
+<h3 id="函数名称"><a href="#函数名称" class="headerlink" title="函数名称"></a>函数名称</h3><p>DW_AT_Subprogram 中可以获取到的信息</p>
+<p>很容易看到，Dwarf调试信息中精心设计了 函数信息的具体表示，我们可以获取名称和类型等重要的信息。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="number">1</span>$:    DW_TAG_unspecified_type</span><br><span class="line">           DW_AT_name(<span class="string">"void"</span>)</span><br><span class="line">           ...</span><br><span class="line"><span class="number">2</span>$     DW_TAG_base_type</span><br><span class="line">           DW_AT_name(<span class="string">"int"</span>)</span><br><span class="line">           ...</span><br><span class="line"><span class="number">3</span>$:    DW_TAG_class_type</span><br><span class="line">           DW_AT_name(<span class="string">"A"</span>)</span><br><span class="line">           ...</span><br><span class="line"><span class="number">4</span>$:        DW_TAG_pointer_type</span><br><span class="line">               DW_AT_type(reference to <span class="number">3</span>$)</span><br><span class="line">               ...</span><br><span class="line"><span class="number">5</span>$:        DW_TAG_const_type</span><br><span class="line">               DW_AT_type(reference to <span class="number">3</span>$)</span><br><span class="line">               ...</span><br><span class="line"><span class="number">6</span>$:        DW_TAG_pointer_type</span><br><span class="line">               DW_AT_type(reference to <span class="number">5</span>$)</span><br><span class="line">               ...</span><br><span class="line"><span class="number">7</span>$:        DW_TAG_subprogram</span><br><span class="line">               DW_AT_name(<span class="string">"func1"</span>)</span><br><span class="line">               DW_AT_type(reference to <span class="number">1</span>$)</span><br><span class="line">               DW_AT_object_pointer(reference to <span class="number">8</span>$)</span><br><span class="line">                   ! References a formal parameter in <span class="keyword">this</span> member function</span><br><span class="line">               ...</span><br><span class="line"><span class="number">8</span>$:            DW_TAG_formal_parameter</span><br><span class="line">                   DW_AT_artificial(<span class="literal">true</span>)</span><br><span class="line">                   DW_AT_name(<span class="string">"this"</span>)</span><br><span class="line">                   DW_AT_type(reference to <span class="number">4</span>$)</span><br><span class="line">                       ! Makes type of 'this' as 'A*' =&gt;</span><br><span class="line">                       ! func1 has <span class="keyword">not</span> been marked <span class="keyword">const</span> <span class="keyword">or</span> <span class="keyword">volatile</span></span><br><span class="line">                   DW_AT_location ...</span><br><span class="line">                   ...</span><br><span class="line"><span class="number">9</span>$:            DW_TAG_formal_parameter</span><br><span class="line">                   DW_AT_name(x1)</span><br><span class="line">                   DW_AT_type(reference to <span class="number">2</span>$)</span><br><span class="line">                   ...</span><br><span class="line"><span class="number">10</span>$:       DW_TAG_subprogram</span><br><span class="line">               DW_AT_name(<span class="string">"func2"</span>)</span><br><span class="line">               DW_AT_type(reference to <span class="number">1</span>$)</span><br><span class="line">               DW_AT_object_pointer(reference to <span class="number">11</span>$)</span><br><span class="line">                   ! References a formal parameter in <span class="keyword">this</span> member function</span><br><span class="line">               ...</span><br><span class="line"><span class="number">11</span>$:           DW_TAG_formal_parameter</span><br><span class="line">                   DW_AT_artificial(<span class="literal">true</span>)</span><br><span class="line">                   DW_AT_name(<span class="string">"this"</span>)</span><br><span class="line">                   DW_AT_type(reference to <span class="number">6</span>$)</span><br><span class="line">                       ! Makes type of 'this' as 'A const*' =&gt;</span><br><span class="line">                       ! func2 marked as <span class="keyword">const</span></span><br><span class="line">                   DW_AT_location ...</span><br><span class="line">                   ...</span><br><span class="line"><span class="number">12</span>$:       DW_TAG_subprogram</span><br><span class="line">               DW_AT_name(<span class="string">"func3"</span>)</span><br><span class="line">               DW_AT_type(reference to <span class="number">1</span>$)</span><br><span class="line">               ...</span><br><span class="line">                   ! No 'this' formal parameter =&gt; func3 is static</span><br><span class="line"><span class="number">13</span>$:           DW_TAG_formal_parameter</span><br><span class="line">                   DW_AT_name(x3)</span><br><span class="line">                   DW_AT_type(reference to <span class="number">2</span>$)</span><br><span class="line">                   ...</span><br></pre></td></tr></table></figure>
+
+
+<h3 id="内联函数处理"><a href="#内联函数处理" class="headerlink" title="内联函数处理"></a>内联函数处理</h3><p>对于内联函数，编译器会将其在多处展开。可以通过 DW_AT_inline 标志判断其展开的状态和判断其是否是”abstract instance entry”.<br>基于存储空间的考虑，把 某个内联函数构造成 “abstract instance entry” 提供名称等信息，可以避免多个具体内联函数展开的重复空间消耗。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line">       ! Abstract instance <span class="keyword">for</span> OUTER</span><br><span class="line">        !</span><br><span class="line">OUTER.AI<span class="number">.1</span><span class="number">.1</span>:</span><br><span class="line">        DW_TAG_subprogram</span><br><span class="line">            DW_AT_name(<span class="string">"OUTER"</span>)</span><br><span class="line">            DW_AT_inline(DW_INL_declared_inlined)</span><br><span class="line">            ! No low/high PCs</span><br><span class="line">OUTER.AI<span class="number">.1</span><span class="number">.2</span>:</span><br><span class="line">            DW_TAG_formal_parameter</span><br><span class="line">                DW_AT_name(<span class="string">"OUTER_FORMAL"</span>)</span><br><span class="line">                DW_AT_type(reference to integer)</span><br><span class="line">                ! No location</span><br><span class="line">OUTER.AI<span class="number">.1</span><span class="number">.3</span>:</span><br><span class="line">            DW_TAG_variable</span><br><span class="line">                DW_AT_name(<span class="string">"OUTER_LOCAL"</span>)</span><br><span class="line">                DW_AT_type(reference to integer)</span><br><span class="line">                ! No location</span><br><span class="line">            !</span><br><span class="line">            ! Abstract instance <span class="keyword">for</span> INNER</span><br><span class="line">            !</span><br><span class="line">INNER.AI<span class="number">.1</span><span class="number">.1</span>:</span><br><span class="line">            DW_TAG_subprogram</span><br><span class="line">                DW_AT_name(<span class="string">"INNER"</span>)</span><br><span class="line">                DW_AT_inline(DW_INL_declared_inlined)</span><br><span class="line">                ! No low/high PCs</span><br><span class="line">INNER.AI<span class="number">.1</span><span class="number">.2</span>:   DW_TAG_formal_parameter</span><br><span class="line">                    DW_AT_name(<span class="string">"INNER_FORMAL"</span>)</span><br><span class="line">                    DW_AT_type(reference to integer)</span><br><span class="line">                    ! No location</span><br><span class="line">INNER.AI<span class="number">.1</span><span class="number">.3</span>:   DW_TAG_variable</span><br><span class="line">                    DW_AT_name(<span class="string">"INNER_LOCAL"</span>)</span><br><span class="line">                    DW_AT_type(reference to integer)</span><br><span class="line">                    ! No location</span><br><span class="line">                ...</span><br><span class="line">                <span class="number">0</span></span><br><span class="line"></span><br><span class="line">            ! <span class="function">No <span class="title">DW_TAG_inlined_subroutine</span> <span class="params">(concrete instance)</span></span></span><br><span class="line">      ! for INNER corresponding to calls of INNER</span><br><span class="line"></span><br><span class="line">            ...</span><br><span class="line">            <span class="number">0</span></span><br><span class="line"></span><br><span class="line">Figure <span class="number">66.</span> Inlining example #<span class="number">1</span>: abstract instance</span><br></pre></td></tr></table></figure>
+
+<p><strong>concrete instance</strong> 表示编译时，某处内联函数的展开。它最主要的信息就是 DW_AT_low_pc,DW_AT_high_pc 通过pc地址信息，我们可以将函数调用地址定位到具体的DWARF debug entry。<br>由于存在 “abstract instance”，”concrete instance” 的某些属性会被省略，因此我们需要通过 DW_AT_abstract_origin 属性去找到对应的 abstract instance entry，获取被省略掉的信息。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line">        ! Concrete instance <span class="keyword">for</span> call <span class="string">"OUTER(7)"</span></span><br><span class="line">  !</span><br><span class="line">OUTER.CI<span class="number">.1</span><span class="number">.1</span>:</span><br><span class="line">        DW_TAG_inlined_subroutine</span><br><span class="line">            ! No name</span><br><span class="line">            DW_AT_abstract_origin(reference to OUTER.AI<span class="number">.1</span><span class="number">.1</span>)</span><br><span class="line">            DW_AT_low_pc(...)</span><br><span class="line">            DW_AT_high_pc(...)</span><br><span class="line">OUTER.CI<span class="number">.1</span><span class="number">.2</span>:</span><br><span class="line">            DW_TAG_formal_parameter</span><br><span class="line">                ! No name</span><br><span class="line">                DW_AT_abstract_origin(reference to OUTER.AI<span class="number">.1</span><span class="number">.2</span>)</span><br><span class="line">    DW_AT_const_value(<span class="number">7</span>)</span><br><span class="line">OUTER.CI<span class="number">.1</span><span class="number">.3</span>:</span><br><span class="line">            DW_TAG_variable</span><br><span class="line">                ! No name</span><br><span class="line">                DW_AT_abstract_origin(reference to OUTER.AI<span class="number">.1</span><span class="number">.3</span>)</span><br><span class="line">                DW_AT_location(...)</span><br><span class="line">            !</span><br><span class="line">            ! <span class="function">No <span class="title">DW_TAG_subprogram</span> <span class="params">(abstract instance)</span> <span class="keyword">for</span> INNER</span></span><br><span class="line">            !</span><br><span class="line">            ! <span class="function">Concrete instance <span class="keyword">for</span> call <span class="title">INNER</span><span class="params">(OUTER_LOCAL)</span></span></span><br><span class="line">            ! </span><br><span class="line">INNER.CI<span class="number">.1</span><span class="number">.1</span>:</span><br><span class="line">            DW_TAG_inlined_subroutine</span><br><span class="line">                ! No name</span><br><span class="line">                DW_AT_abstract_origin(reference to INNER.AI<span class="number">.1</span><span class="number">.1</span>)</span><br><span class="line">                DW_AT_low_pc(...)</span><br><span class="line">                DW_AT_high_pc(...)</span><br><span class="line">                DW_AT_static_link(...)</span><br><span class="line">INNER.CI<span class="number">.1</span><span class="number">.2</span>:   DW_TAG_formal_parameter</span><br><span class="line">                    ! No name</span><br><span class="line">                    DW_AT_abstract_origin(reference to INNER.AI<span class="number">.1</span><span class="number">.2</span>)</span><br><span class="line">                    DW_AT_location(...)</span><br><span class="line">INNER.CI<span class="number">.1</span><span class="number">.3</span>:   DW_TAG_variable</span><br><span class="line">                    ! No name</span><br><span class="line">                    DW_AT_abstract_origin(reference to INNER.AI<span class="number">.1</span><span class="number">.3</span>)</span><br><span class="line">                    DW_AT_location(...)</span><br><span class="line">                ...</span><br><span class="line">                <span class="number">0</span></span><br><span class="line"></span><br><span class="line">      ! Another concrete instance of INNER within OUTER</span><br><span class="line">      ! <span class="keyword">for</span> the call <span class="string">"INNER(31)"</span></span><br><span class="line"></span><br><span class="line">            ...</span><br><span class="line">            <span class="number">0</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="非定义调试信息项处理"><a href="#非定义调试信息项处理" class="headerlink" title="非定义调试信息项处理"></a>非定义调试信息项处理</h3><p>当函数定义并不在声明区域时，subprogram DIE 就会有 DW_AT_specification 属性，指向相关的函数定义DIE.<br>对于带有 DW_AT_specification 的调试信息项，我们需要进行特殊处理。</p>
+<h3 id="定位地址对应Dwarf-debug-info"><a href="#定位地址对应Dwarf-debug-info" class="headerlink" title="定位地址对应Dwarf debug info"></a>定位地址对应Dwarf debug info</h3><p>backtrace() 我们可以拿到 image 的 loadaddress 和 address调用地址。</p>
+<p>进而得到文件虚拟地址<br>fileVmAddress = address - (loadaddress - imageFileVmTextAddress)</p>
+<p>通过文件虚拟地址后通过 .debug_aranges 查找到指定的 DWARF compile unit，进而查找到具体的DIE. 从属性中获取我们需要的信息。</p>
+<p>.debug_aranges 是DWARF 中包含 debug info entry offset的 Section。<br>DWARF compile unit 是编译单元，在这里我们可以理解为文件或文件中的片段。也是DIE</p>
+<h3 id="行号信息"><a href="#行号信息" class="headerlink" title="行号信息"></a>行号信息</h3><p>对于一个文件，我们将其编译后，其产出汇编代码类似于这种形式，在原始文件中的行对应着多条汇编指令。<br>对于行号的查找我们只需要 将符号的运行时地址转换为文件的虚拟地址，在该文件的行号信息中进行范围查找即可。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">1</span>: <span class="keyword">int</span></span><br><span class="line"><span class="number">2</span>: main()</span><br><span class="line">    <span class="number">0x239</span>: push pb</span><br><span class="line">    <span class="number">0x23a</span>: mov  bp,sp</span><br><span class="line"><span class="number">3</span>:  &#123;</span><br><span class="line"><span class="number">4</span>:  <span class="built_in">printf</span>(“Omit needless words\n”);</span><br><span class="line">    <span class="number">0x23c</span>: mov  ax,<span class="number">0xaa</span></span><br><span class="line">    <span class="number">0x23f</span>: push ax</span><br><span class="line">    <span class="number">0x240</span>: call _printf</span><br><span class="line">    <span class="number">0x243</span>: pop  cx</span><br><span class="line"><span class="number">5</span>:  <span class="built_in">exit</span>(<span class="number">0</span>);</span><br><span class="line">    <span class="number">0x244</span>: xor  ax,ax</span><br><span class="line">    <span class="number">0x246</span>: push ax</span><br><span class="line">    <span class="number">0x247</span>: call _exit</span><br><span class="line">    <span class="number">0x24a</span>: pop  cx</span><br><span class="line"><span class="number">6</span>:  &#125;</span><br><span class="line">    <span class="number">0x24b</span>: pop  bp</span><br><span class="line">    <span class="number">0x24c</span>: ret</span><br><span class="line"><span class="number">7</span>:</span><br><span class="line">    <span class="number">0x24d</span>:</span><br></pre></td></tr></table></figure>
+
+<p>对应的编码类似于: SPECIAL(n,m) 制定了行号增加和地址增加</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">Opcode  Operand Byte <span class="built_in">Stream</span></span><br><span class="line">--------------------------------------------------------------------------------</span><br><span class="line">DW_LNS_advance_pc LEB128(0x239) 0x2, 0xb9, 0x04</span><br><span class="line">SPECIAL(<span class="number">2</span>, <span class="number">0</span>)   <span class="number">0xb</span></span><br><span class="line">SPECIAL(<span class="number">2</span>, <span class="number">3</span>)   <span class="number">0x38</span></span><br><span class="line">SPECIAL(<span class="number">1</span>, <span class="number">8</span>)   <span class="number">0x82</span></span><br><span class="line">SPECIAL(<span class="number">1</span>, <span class="number">7</span>)   <span class="number">0x73</span></span><br><span class="line">DW_LNS_advance_pc   LEB128(2) 0x2, 0x2</span><br><span class="line">DW_LNE_end_sequence   <span class="number">0x0</span>, <span class="number">0x1</span>, <span class="number">0x1</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="利用symtab符号化"><a href="#利用symtab符号化" class="headerlink" title="利用symtab符号化"></a>利用symtab符号化</h2><p>当我们代码编译的时候，可以选择产生调试信息。也可以不产生调试信息，作为降级方案，我们仍可采用symbtab所包含的信息进行符号化。<br>symtab段我们可以提取到具体符号的地址，对应字符串表中的偏移地址，很容易就取到对应的符号名称。</p>
+<p>具体可以参考各种实现，这里贴一段fishhook里的代码段</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">rebind_symbols_for_image</span><span class="params">(struct rebindings_entry *rebindings,</span></span></span><br><span class="line"><span class="function"><span class="params">                                     <span class="keyword">const</span> struct mach_header *header,</span></span></span><br><span class="line"><span class="function"><span class="params">                                     <span class="keyword">intptr_t</span> slide)</span> </span>&#123;</span><br><span class="line">  Dl_info info;</span><br><span class="line">  <span class="keyword">if</span> (dladdr(header, &amp;info) == <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="built_in">printf</span>(<span class="string">"dli_fname:%s \ndli_sname:%s"</span>, info.dli_fname, info.dli_sname);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">segment_command_t</span> *cur_seg_cmd;</span><br><span class="line">  <span class="keyword">segment_command_t</span> *linkedit_segment = <span class="literal">NULL</span>;</span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">symtab_command</span>* <span class="title">symtab_cmd</span> = <span class="title">NULL</span>;</span></span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">dysymtab_command</span>* <span class="title">dysymtab_cmd</span> = <span class="title">NULL</span>;</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">uintptr_t</span> cur = (<span class="keyword">uintptr_t</span>)header + <span class="keyword">sizeof</span>(<span class="keyword">mach_header_t</span>);</span><br><span class="line">  <span class="keyword">for</span> (uint i = <span class="number">0</span>; i &lt; header-&gt;ncmds; i++, cur += cur_seg_cmd-&gt;cmdsize) &#123;</span><br><span class="line">    cur_seg_cmd = (<span class="keyword">segment_command_t</span> *)cur;</span><br><span class="line">    <span class="keyword">if</span> (cur_seg_cmd-&gt;cmd == LC_SEGMENT_ARCH_DEPENDENT) &#123;</span><br><span class="line">      <span class="keyword">if</span> (<span class="built_in">strcmp</span>(cur_seg_cmd-&gt;segname, SEG_LINKEDIT) == <span class="number">0</span>) &#123;</span><br><span class="line">        linkedit_segment = cur_seg_cmd;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (cur_seg_cmd-&gt;cmd == LC_SYMTAB) &#123;</span><br><span class="line">      symtab_cmd = (struct symtab_command*)cur_seg_cmd;</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (cur_seg_cmd-&gt;cmd == LC_DYSYMTAB) &#123;</span><br><span class="line">      dysymtab_cmd = (struct dysymtab_command*)cur_seg_cmd;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (!symtab_cmd || !dysymtab_cmd || !linkedit_segment ||</span><br><span class="line">      !dysymtab_cmd-&gt;nindirectsyms) &#123;</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Find base symbol/string table addresses</span></span><br><span class="line">  <span class="keyword">uintptr_t</span> linkedit_base = (<span class="keyword">uintptr_t</span>)slide + linkedit_segment-&gt;vmaddr - linkedit_segment-&gt;fileoff;</span><br><span class="line">  <span class="keyword">nlist_t</span> *symtab = (<span class="keyword">nlist_t</span> *)(linkedit_base + symtab_cmd-&gt;symoff);</span><br><span class="line">  <span class="keyword">char</span> *strtab = (<span class="keyword">char</span> *)(linkedit_base + symtab_cmd-&gt;stroff);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Get indirect symbol table (array of uint32_t indices into symbol table)</span></span><br><span class="line">  <span class="keyword">uint32_t</span> *indirect_symtab = (<span class="keyword">uint32_t</span> *)(linkedit_base + dysymtab_cmd-&gt;indirectsymoff);</span><br><span class="line"></span><br><span class="line">  cur = (<span class="keyword">uintptr_t</span>)header + <span class="keyword">sizeof</span>(<span class="keyword">mach_header_t</span>);</span><br><span class="line">  <span class="keyword">for</span> (uint i = <span class="number">0</span>; i &lt; header-&gt;ncmds; i++, cur += cur_seg_cmd-&gt;cmdsize) &#123;</span><br><span class="line">    cur_seg_cmd = (<span class="keyword">segment_command_t</span> *)cur;</span><br><span class="line">    <span class="keyword">if</span> (cur_seg_cmd-&gt;cmd == LC_SEGMENT_ARCH_DEPENDENT) &#123;</span><br><span class="line">      <span class="keyword">if</span> (<span class="built_in">strcmp</span>(cur_seg_cmd-&gt;segname, SEG_DATA) != <span class="number">0</span> &amp;&amp;</span><br><span class="line">          <span class="built_in">strcmp</span>(cur_seg_cmd-&gt;segname, SEG_DATA_CONST) != <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">continue</span>;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">for</span> (uint j = <span class="number">0</span>; j &lt; cur_seg_cmd-&gt;nsects; j++) &#123;</span><br><span class="line">        <span class="keyword">section_t</span> *sect =</span><br><span class="line">          (<span class="keyword">section_t</span> *)(cur + <span class="keyword">sizeof</span>(<span class="keyword">segment_command_t</span>)) + j;</span><br><span class="line">        <span class="keyword">if</span> ((sect-&gt;flags &amp; SECTION_TYPE) == S_LAZY_SYMBOL_POINTERS) &#123;</span><br><span class="line">          perform_rebinding_with_section(rebindings, sect, slide, symtab, strtab, indirect_symtab);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> ((sect-&gt;flags &amp; SECTION_TYPE) == S_NON_LAZY_SYMBOL_POINTERS) &#123;</span><br><span class="line">          perform_rebinding_with_section(rebindings, sect, slide, symtab, strtab, indirect_symtab);</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="优化"><a href="#优化" class="headerlink" title="优化"></a>优化</h2><p>符号化工具提供了 将函数地址 转化为 具体名称等信息的能力。但是提供大规模的符号化能力，需要在 网络I/O,缓存,Server端进一步的优化，这些优化我会写在内网Wiki上 hhhhh…</p>
+<h2 id="写在最后"><a href="#写在最后" class="headerlink" title="写在最后"></a>写在最后</h2><p>符号化仅是DWARF提供能力的冰山一角，作为提供给 lldb, gdb等调试器的文件格式，蕴含着大量的信息，也就是说，上传了DWARF文件，也相当于应用裸奔了…</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" data-id="ck8hkauuo000totjh0hyi8vek" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+    <article id="post-CrashSymbolicateSystemDesign" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/09/16/CrashSymbolicateSystemDesign/" class="article-date">
+  <time datetime="2018-09-16T14:36:27.000Z" itemprop="datePublished">2018-09-16</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/APM/">APM</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/09/16/CrashSymbolicateSystemDesign/">APM Crash系统</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h2 id="整体架构"><a href="#整体架构" class="headerlink" title="整体架构"></a>整体架构</h2><p><img src="design.png" alt="design"></p>
+<h2 id="客户端"><a href="#客户端" class="headerlink" title="客户端"></a>客户端</h2><ol>
+<li>Crash/OOM/ANR 抓取</li>
+<li>上报日志格式</li>
+</ol>
+<h3 id="Crash-OOM-卡顿-抓取"><a href="#Crash-OOM-卡顿-抓取" class="headerlink" title="Crash/OOM/卡顿 抓取"></a>Crash/OOM/卡顿 抓取</h3><p>这块技术有很多的开源方案，</p>
+<p>Crash抓取有 KSCrash PLCrash…<br>OOM 可以参考腾讯的OOMDetector自己优化一下<br>ANR 可以参考很多方案，这里就不细说了</p>
+<h3 id="日志上报格式"><a href="#日志上报格式" class="headerlink" title="日志上报格式"></a>日志上报格式</h3><p>上报的日志我认为最好兼容苹果的 symbolicatecrash 工具, 这就需要我们去理解 symbolicate 工作的原理，随后我们可以加上自己的内容，方便自己进行更多的功能扩展。</p>
+<h4 id="symbolicatecrash-的原理"><a href="#symbolicatecrash-的原理" class="headerlink" title="symbolicatecrash 的原理"></a><strong>symbolicatecrash</strong> 的原理</h4><ol>
+<li>解析头部信息是否符合规范</li>
+<li>解析堆栈信息，符号表 信息</li>
+<li>在文件中查找符号表的路径</li>
+<li>根据堆栈信息去匹配相应符号表</li>
+<li>使用atosl工具进行符号化</li>
+<li>文本替换成符号化后的日志</li>
+</ol>
+<h2 id="服务端"><a href="#服务端" class="headerlink" title="服务端"></a>服务端</h2><ol>
+<li>符号化和解析服务</li>
+<li>堆栈聚合服务</li>
+<li>符号文件管理系统</li>
+</ol>
+<h3 id="符号化和解析服务"><a href="#符号化和解析服务" class="headerlink" title="符号化和解析服务"></a>符号化和解析服务</h3><p>我们可以把这块看成两个部分，1符号化，2解析服务</p>
+<h4 id="符号化"><a href="#符号化" class="headerlink" title="符号化"></a>符号化</h4><p>符号化就是把地址翻译成对应的符号信息，比如说 把堆栈调用的地址 翻译成 调用方法的名称。<br>苹果给我们在 MacOS 下提供了 atosl 工具，可以帮助我们完成这部分工作。但是这个工具仅仅可以在MacOS 下工作，对于大规模的用户日志来说，依赖于MacOS系统不容易部署维护，费用也十分昂贵，因此我们需要在Linux下实现一个相等功能的工具。</p>
+<h4 id="解析服务"><a href="#解析服务" class="headerlink" title="解析服务"></a>解析服务</h4><p>由于我们的日志是文本格式，我们需要提取其中的信息才可以将其用作符号化工具的输入，可以通过正则匹配的方式去处理这些信息。</p>
+<h2 id="工具实现"><a href="#工具实现" class="headerlink" title="工具实现"></a>工具实现</h2><ol>
+<li>Linux 平台下可用的符号化工具</li>
+</ol>
+<h3 id="Linux-平台下可用的符号化工具"><a href="#Linux-平台下可用的符号化工具" class="headerlink" title="Linux 平台下可用的符号化工具"></a>Linux 平台下可用的符号化工具</h3><p>总体来说，iOS符号化我们需要了解两部分知识， 1 Dwarf调试格式 2 Macho文件格式</p>
+<h4 id="Dwarf调试格式"><a href="#Dwarf调试格式" class="headerlink" title="Dwarf调试格式"></a>Dwarf调试格式</h4><p>我们经常可以接触到的dsym文件是一个目录，其中包含了一个格式为Dwarf的调试信息文件。<br>调试信息是在编译器生成机器码的时候一起产生的。它代表着可执行程序和源代码之间的关系。这个信息以预定义的格式进行编码，并同机器码一起存储。<br>在DWARF里基本的描述项是调试信息项（DebuggingInformation Entry——DIE）。一个DIE有一个标签，它指明了这个DIE描述什么及一个填入了细节并进一步描述该项的属性列表。一个DIE（除了最顶层的）被一个父DIE包含（或者说拥有），并可能有兄弟DIE或子DIE。<br>通过提取Dwarf文件中的调试信息和对应的堆栈进行匹配，就可以解出一些符号信息，包含调用行号文件名称等信息。</p>
+<h5 id="需要注意的一些知识点"><a href="#需要注意的一些知识点" class="headerlink" title="需要注意的一些知识点"></a>需要注意的一些知识点</h5><p><strong>DW_AT_abstract_origin， DW_AT_specification</strong></p>
+<blockquote>
+<p>A debugging information entry that represents a declaration that<br>completes another (earlier) non-defining declaration may have a<br>DW_AT_specification attribute whose value is a reference to the<br>debugging information entry representing the non-defining declaration.<br>A debugging information entry with a DW_AT_specification attribute<br>does not need to duplicate information provided by the debugging<br>information entry referenced by that specification attribute.<br>A DW_TAG_subprogram entry can contain a reference to a DW_AT_abstract_origin entry instead of &gt; duplicating the information. </p>
+</blockquote>
+<p>这意味着 我们需要针对 DW_AT_abstract_origin 进行特别处理</p>
+<h4 id="Macho-文件格式"><a href="#Macho-文件格式" class="headerlink" title="Macho 文件格式"></a>Macho 文件格式</h4><p>上文中提到的符号文件，是Macho文件格式的。<br>Macho文件中包含 SymbolTable 可以提取出符号的名称，对于系统库和外部符号（例如你的静态库中的符号），我们可以从SymbolTable中提取符号名称。</p>
+<h3 id="堆栈聚合服务"><a href="#堆栈聚合服务" class="headerlink" title="堆栈聚合服务"></a>堆栈聚合服务</h3><p>因为导致用户Crash的问题大多是相同的，导致用户Crash的堆栈存在许多相似和相等的情况，我们需要把同一类堆栈聚合在一起，协助平台用户高效的解决问题。</p>
+<h2 id="系列文章"><a href="#系列文章" class="headerlink" title="系列文章"></a>系列文章</h2><p>接下来我会逐渐介绍这整套系统的设计和相关技术实现。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2018/09/16/CrashSymbolicateSystemDesign/" data-id="ck8hkauub0007otjh4g564jbv" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+</article>
+
+
+  
     <article id="post-libmalloc" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/06/13/libmalloc/" class="article-date">
@@ -123,7 +272,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/06/13/libmalloc/" data-id="ck7yqfumz00122fjhfdccbbdy" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/06/13/libmalloc/" data-id="ck8hkauus0012otjhhcxgfwei" class="article-share-link">Share</a>
       
       
     </footer>
@@ -227,7 +376,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/04/13/dependency/" data-id="ck7yqfumo000o2fjh7z2wbp0p" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/04/13/dependency/" data-id="ck8hkauum000potjh3zzd7s2i" class="article-share-link">Share</a>
       
       
     </footer>
@@ -321,7 +470,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/04/10/iosoom/" data-id="ck7yqfumy00102fjh14eg0dk0" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/04/10/iosoom/" data-id="ck8hkauur000yotjh3dvja9ye" class="article-share-link">Share</a>
       
       
     </footer>
@@ -382,7 +531,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/01/15/sharedlibraryandpic/" data-id="ck7yqfun000152fjhc5ebdajo" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/01/15/sharedlibraryandpic/" data-id="ck8hkauuw001aotjh4lghbtlx" class="article-share-link">Share</a>
       
       
     </footer>
@@ -468,7 +617,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2017/12/24/In-depthUnderStandingOfThreadSafety/" data-id="ck7yqfum600062fjhbvmlfb9v" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2017/12/24/In-depthUnderStandingOfThreadSafety/" data-id="ck8hkauud000aotjh54y7682c" class="article-share-link">Share</a>
       
       
     </footer>
@@ -560,7 +709,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2017/12/04/safeSwizzleRSSwizzleAnalyze/" data-id="ck7yqfun2001c2fjh1ru63elh" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2017/12/04/safeSwizzleRSSwizzleAnalyze/" data-id="ck8hkauuv0018otjhe5gc6fpt" class="article-share-link">Share</a>
       
       
     </footer>
@@ -850,7 +999,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2017/10/27/dyld3withappstart/" data-id="ck7yqfuml000m2fjh0qr3685x" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2017/10/27/dyld3withappstart/" data-id="ck8hkauun000rotjhawyaf68e" class="article-share-link">Share</a>
       
       
     </footer>
@@ -1004,144 +1153,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/" data-id="ck7yqfun3001d2fjhd5juhptu" class="article-share-link">Share</a>
-      
-      
-    </footer>
-  </div>
-  
-</article>
-
-
-  
-    <article id="post-Objective-C-深入理解中的消息机制和方法调用" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/" class="article-date">
-  <time datetime="2017-05-01T06:09:25.000Z" itemprop="datePublished">2017-05-01</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/iOS/">iOS</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/">Objective-C 深入理解中的消息机制和方法调用</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <h2 id="objc-msgSend-的背后"><a href="#objc-msgSend-的背后" class="headerlink" title="objc_msgSend 的背后"></a>objc_msgSend 的背后</h2><p>在Objective-C中，消息在Runtime的时候才绑定到方法实现。编译器把</p>
-<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[receiver message]</span><br></pre></td></tr></table></figure>
-<p>转换成</p>
-<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">objc_msgSend(receiver, selector)</span><br></pre></td></tr></table></figure>
-
-<p>这个messaging function 做了动态绑定所有的工作</p>
-<ul>
-<li>首先找到selector 指定的 方法实现.相同的方法可以在不同的类中有不同的实现。被找到的方法实现取决于消息的接受者(类)。</li>
-<li>然后调用方法实现，并传递方法所需的参数.</li>
-<li>最后，将所调用方法的返回值 作为自身的返回值.</li>
-</ul>
-<p>消息传递的关键在于 编译器为每个class和object建立的 结构体.每个类的结构体包含着两个必备的元素:</p>
-<ul>
-<li>一个指向父类的指针</li>
-<li>一个 class dispatch table.表中包含了method selectors 和 特定class相应方法实现的地址</li>
-</ul>
-<p>实例中有一个isa指针，isa指向实例的class structure.</p>
-<p>如图所示 通过isa指针，描述了类的继承关系<br><img src="messaging1.gif" alt="message1"></p>
-<h3 id="消息传递的过程"><a href="#消息传递的过程" class="headerlink" title="消息传递的过程"></a>消息传递的过程</h3><ol>
-<li>当一个消息被发送给一个对象，messaging function<strong>跟随对象的isa指针</strong>找到他的class structure,在dispatch table中寻找method selector.</li>
-<li>如果没有找到selector,objc_msgsend 跟随该<strong>类实例的isa</strong>找到父类，尝试在父类的dispatch table中寻找selector</li>
-<li>重复步骤2,直到isa指向NSObject Class为止。</li>
-</ol>
-<p><strong>一但objc_msgsend定位到了selector,该函数,调用dispatch table中的方法，并将其传递给接收对象的数据结构。</strong></p>
-<p>这是Runtime中选择所需方法实现的实现方式.在面向对象编程的术语中，这些methods和messages 是动态绑定的。</p>
-<p><strong>为了加速消息传递的过程，runtime 系统缓存了使用过的 selectors 和 方法实现的地址。</strong></p>
-<p>每个class都有特定的cache.并且它可以包含 继承的selector和 定义在类中的方法。</p>
-<p>在OC编程中，你向对象发送消息是因为该对象实现了相应的方法，并且你希望调用该方法。<br>在搜索dispatch tables之前，消息传递机制通常会<strong>首先检查接受方法的对象的cache</strong>。如果方法的selector在缓存中，调用method所需的时间仅仅比function call 稍微慢一点点<br>一但程序预热cache之后，大多数消息调用都能从cache中找到。为了存放更多的方法，Cache会动态的增长。 </p>
-<h2 id="深入理解消息转发过程"><a href="#深入理解消息转发过程" class="headerlink" title="深入理解消息转发过程"></a>深入理解消息转发过程</h2><p>以下是文档的中文翻译：</p>
-<h3 id="resolveInstanceMethod"><a href="#resolveInstanceMethod" class="headerlink" title="resolveInstanceMethod:"></a>resolveInstanceMethod:</h3><p>resolveInstanceMethod: 和 resolveClassMethod: 方法允许你为一个给定的 selector 动态的提供方法的实现。<br>OC 方法在底层的C函数的实现中需要至少两个参数：self 和 _cmd。使用 class_addMethod 函数，你能够添加一个函数到一个类来作为方法使用。</p>
-<h3 id="forwardingTargetForSelector"><a href="#forwardingTargetForSelector" class="headerlink" title="forwardingTargetForSelector:"></a>forwardingTargetForSelector:</h3><p>如果一个对象实现了这个方法，并且返回了一个非空（以及非 self）的结果，返回的对象会用来作为一个新的接收对象，随后消息会被重新派发给这个新对象。（很明显，如果你在这个方法中返回了self，那这段代码将会坠入无限循环。）<br>如果你这段方法在一个非 root 的类中实现，并且如果这个类根据给定的selector什么都不作返回，那么你应该返回一个 执行父类的实现后返回的结果。<br>这个方法为对象在开销大的多的 forwardInvocation:  方法接管之前提供了一次转发未知消息的机会。这对你只是想简单的重新定位消息到另一个对象是非常有用的，并且相对普通转发更快一个数量级。如果转发的目的是捕捉到NSInvocation，或者操作参数，亦或者是在转发过程中返回一个值，那这个方法就没有用了。</p>
-<h3 id="forwardInvocation"><a href="#forwardInvocation" class="headerlink" title="forwardInvocation:"></a>forwardInvocation:</h3><p>当对象接受到一条自己不能响应的消息时，运行时会给接收者一次机会来把消息委托给另一个接收者。他委托的消息是通过NSInvocation对象来表示的，然后将这个对象作为 forwardInvocation: 的参数。接收者收到 forwardInvocation: 这条消息后可以选择转发这个NSInvacation对象给其他接收对象。（如果这个接收对象也不能响应这条消息，他也会给一次转发这条消息的机会。）<br>因此 forwardInvocation: 允许在两个对象之间通过某个消息来建立关系。转发给其他对象的这种行为，从某种意义上来说，他“继承”了他所转发给的对象的一些特征。注意为了响应这个你无法识别的方法，你除了 forwardInvocation: 方法外，还必须重写 methodSignatureForSelector:  方法。在转发消息的机制中会从 methodSignatureForSelector: 方法来创建NSInvocation对象。所以你必须为给定的 selector 提供一个合适的 method signature ，可以通过预先设置一个或者向另一个对象请求一个。</p>
-<h3 id="forwardInvocation，forwardingTargetForSelector-的差异"><a href="#forwardInvocation，forwardingTargetForSelector-的差异" class="headerlink" title="forwardInvocation，forwardingTargetForSelector  的差异"></a>forwardInvocation，forwardingTargetForSelector  的差异</h3><p><strong>相较于 forwardingTargetForSelector 只能拿到 selector 来说， forwardInvocation 借助于invocation 可以获得参数和返回值等信息。</strong></p>
-<h4 id="NSInvocation文档翻译"><a href="#NSInvocation文档翻译" class="headerlink" title="NSInvocation文档翻译"></a>NSInvocation文档翻译</h4><p>NSInvocation:NSInvocation对象用于在对象之间和应用程序之间存储和转发消息，主要由NSTimer对象和分布式对象系统来完成。 NSInvocation对象包含Objective-C消息的所有元素：目标，选择器，参数和返回值。每个元素都可以直接设置，并在调度NSInvocation对象时自动设置返回值。</p>
-<p>一个NSInvocation对象可以重复地分派给不同的目标;它的参数可以针对不同结果的调度时进行修改;甚至它的选择器可以变为另一个具有相同的方法签名（参数和返回类型）。这种灵活性使得NSInvocation对重复发送具有许多参数和变体的消息有用;而不是为每条消息重新输入一个稍微不同的表达式，每次在将其分派到新目标之前，都需要根据需要修改NSInvocation对象。</p>
-<p>NSInvocation不支持具有可变数量的参数或联合参数的方法的调用。您应该使用invocationWithMethodSignature：类方法来创建NSInvocation对象;你不应该使用alloc和init来创建这些对象。</p>
-<p>此类不保留默认包含的调用的参数。如果这些对象可能在创建NSInvocation实例和使用它的时间之间消失，则应该自己保留对象或调用retainArguments方法以使调用对象保留它们本身。</p>
-<p>总结一下：可以拿到参数和返回值,可以改selecter(方法签名相同),可以把消息分发给多个对象。相较于 forwardingTargetForSelector 只能拿到selector 灵活了很多。</p>
-<h4 id="forwardingTargetForSelector-相较于-forwardInvocation-的优点"><a href="#forwardingTargetForSelector-相较于-forwardInvocation-的优点" class="headerlink" title="forwardingTargetForSelector 相较于 forwardInvocation 的优点"></a>forwardingTargetForSelector 相较于 forwardInvocation 的优点</h4><p>This method gives an object a chance to redirect an unknown message sent to it before the much more expensive forwardInvocation: machinery takes over. This is useful when you simply want to redirect messages to another object and can be an order of magnitude faster than regular forwarding. It is not useful where the goal of the forwarding is to capture the NSInvocation, or manipulate the arguments or return value during the forwarding.</p>
-<p>简而言之，只做简单的消息转发时， 它比forwardInvocation 对性能的消耗要少。</p>
-<p><strong>我们需要注意</strong></p>
-<ol>
-<li>forwardInvocation，forwardingTargetForSelector 都会给指定的对象 再走一次 objc_msgsend流程。</li>
-<li>forwardInvocation 相较于 forwardingTargetForSelector  消耗更大</li>
-<li>forwardInvocation 可以拿到参数和返回值,可以改selecter(方法签名相同),可以把消息分发给多个对象。相较于 forwardingTargetForSelector 只能拿到selector 灵活了很多。</li>
-</ol>
-<h2 id="来看看C-中的方法调度机制"><a href="#来看看C-中的方法调度机制" class="headerlink" title="来看看C++中的方法调度机制"></a>来看看C++中的方法调度机制</h2><p><strong>直接调度</strong><br>直接调度是最快的一种。它不仅有最少的汇编指令，而且编译器也可以做各种智能优化，比如内联代码，许多其它本文不会涉及的东西。直接调度也常常被称为静态调度。</p>
-<p><strong>表调度</strong><br>表调度是编译型语言中最常见的动态行为的实现方式。表调度在类声明中为每一个方法用一个函数指针的数组。大多数语言称之为“虚表”。每一个子类都有它自己的一张父类表的拷贝，表中每个被覆盖的方法都是不同于父类的函数指针。当子类添加新的方法的时候，这些方法就被追加到这个数组的后面。然后在运行时就会访问这个表来决定执行哪个方法。</p>
-<h3 id="V-Table-和-dispatch-table-的不同之处"><a href="#V-Table-和-dispatch-table-的不同之处" class="headerlink" title="V-Table 和 dispatch table 的不同之处"></a>V-Table 和 dispatch table 的不同之处</h3><p><strong>这里的虚表 与 Objective-C 中的dispatch table 完全是两个概念.</strong><br>虚表包含了当前类和父类的函数指针。<br>dispatch table 仅仅包含了当前类的selector和MethodIMP的地址。 </p>
-<h3 id="其实-Objective-C-中也有-V-Table"><a href="#其实-Objective-C-中也有-V-Table" class="headerlink" title="其实 Objective-C 中也有 V-Table"></a>其实 Objective-C 中也有 V-Table</h3><p>其实OC中也有V-Table 它用来存放 最常调用的方法来加速程序的性能。这些方法直接通过V-table 调用。（执行msg_send()会花费更多的时间)<br>每一个对象都有一个vtable point 指向 一些方法的IMP.<br><a href="https://opensource.apple.com/source/objc4/objc4-437/runtime/objc-runtime-new.m" target="_blank" rel="noopener">objc-runtime-new.m</a></p>
-<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/***********************************************************************</span></span><br><span class="line"><span class="comment">* vtable dispatch</span></span><br><span class="line"><span class="comment">* </span></span><br><span class="line"><span class="comment">* Every class gets a vtable pointer. The vtable is an array of IMPs.</span></span><br><span class="line"><span class="comment">* The selectors represented in the vtable are the same for all classes</span></span><br><span class="line"><span class="comment">*   (i.e. no class has a bigger or smaller vtable).</span></span><br><span class="line"><span class="comment">* Each vtable index has an associated trampoline which dispatches to </span></span><br><span class="line"><span class="comment">*   the IMP at that index for the receiver class's vtable (after </span></span><br><span class="line"><span class="comment">*   checking for NULL). Dispatch fixup uses these trampolines instead </span></span><br><span class="line"><span class="comment">*   of objc_msgSend.</span></span><br><span class="line"><span class="comment">* Fragility: The vtable size and list of selectors is chosen at launch </span></span><br><span class="line"><span class="comment">*   time. No compiler-generated code depends on any particular vtable </span></span><br><span class="line"><span class="comment">*   configuration, or even the use of vtable dispatch at all.</span></span><br><span class="line"><span class="comment">* Memory size: If a class's vtable is identical to its superclass's </span></span><br><span class="line"><span class="comment">*   (i.e. the class overrides none of the vtable selectors), then </span></span><br><span class="line"><span class="comment">*   the class points directly to its superclass's vtable. This means </span></span><br><span class="line"><span class="comment">*   selectors to be included in the vtable should be chosen so they are </span></span><br><span class="line"><span class="comment">*   (1) frequently called, but (2) not too frequently overridden. In </span></span><br><span class="line"><span class="comment">*   particular, -dealloc is a bad choice.</span></span><br><span class="line"><span class="comment">* Forwarding: If a class doesn't implement some vtable selector, that </span></span><br><span class="line"><span class="comment">*   selector's IMP is set to objc_msgSend in that class's vtable.</span></span><br><span class="line"><span class="comment">* +initialize: Each class keeps the default vtable (which always </span></span><br><span class="line"><span class="comment">*   redirects to objc_msgSend) until its +initialize is completed.</span></span><br><span class="line"><span class="comment">*   Otherwise, the first message to a class could be a vtable dispatch, </span></span><br><span class="line"><span class="comment">*   and the vtable trampoline doesn't include +initialize checking.</span></span><br><span class="line"><span class="comment">* Changes: Categories, addMethod, and setImplementation all force vtable </span></span><br><span class="line"><span class="comment">*   reconstruction for the class and all of its subclasses, if the </span></span><br><span class="line"><span class="comment">*   vtable selectors are affected.</span></span><br><span class="line"><span class="comment">**********************************************************************/</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">const</span> <span class="keyword">char</span> * <span class="keyword">const</span> defaultVtable[] = &#123;</span><br><span class="line">    <span class="string">"allocWithZone:"</span>, </span><br><span class="line">    <span class="string">"alloc"</span>, </span><br><span class="line">    <span class="string">"class"</span>, </span><br><span class="line">    <span class="string">"self"</span>, </span><br><span class="line">    <span class="string">"isKindOfClass:"</span>, </span><br><span class="line">    <span class="string">"respondsToSelector:"</span>, </span><br><span class="line">    <span class="string">"isFlipped"</span>, </span><br><span class="line">    <span class="string">"length"</span>, </span><br><span class="line">    <span class="string">"objectForKey:"</span>, </span><br><span class="line">    <span class="string">"count"</span>, </span><br><span class="line">    <span class="string">"objectAtIndex:"</span>, </span><br><span class="line">    <span class="string">"isEqualToString:"</span>, </span><br><span class="line">    <span class="string">"isEqual:"</span>, </span><br><span class="line">    <span class="string">"retain"</span>, </span><br><span class="line">    <span class="string">"release"</span>, </span><br><span class="line">    <span class="string">"autorelease"</span>, </span><br><span class="line">&#125;;</span><br><span class="line"><span class="keyword">static</span> <span class="keyword">const</span> <span class="keyword">char</span> * <span class="keyword">const</span> defaultVtableGC[] = &#123;</span><br><span class="line">    <span class="string">"allocWithZone:"</span>, </span><br><span class="line">    <span class="string">"alloc"</span>, </span><br><span class="line">    <span class="string">"class"</span>, </span><br><span class="line">    <span class="string">"self"</span>, </span><br><span class="line">    <span class="string">"isKindOfClass:"</span>, </span><br><span class="line">    <span class="string">"respondsToSelector:"</span>, </span><br><span class="line">    <span class="string">"isFlipped"</span>, </span><br><span class="line">    <span class="string">"length"</span>, </span><br><span class="line">    <span class="string">"objectForKey:"</span>, </span><br><span class="line">    <span class="string">"count"</span>, </span><br><span class="line">    <span class="string">"objectAtIndex:"</span>, </span><br><span class="line">    <span class="string">"isEqualToString:"</span>, </span><br><span class="line">    <span class="string">"isEqual:"</span>, </span><br><span class="line">    <span class="string">"hash"</span>, </span><br><span class="line">    <span class="string">"addObject:"</span>, </span><br><span class="line">    <span class="string">"countByEnumeratingWithState:objects:count:"</span>, </span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://yoursite.com/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/" data-id="ck7yqfumh000f2fjh5wnlgzjm" class="article-share-link">Share</a>
-      
-      
-    </footer>
-  </div>
-  
-</article>
-
-
-  
-    <article id="post-Cocoa-深入理解KVO" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" class="article-date">
-  <time datetime="2017-04-20T04:44:52.000Z" itemprop="datePublished">2017-04-20</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/iOS/">iOS</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/">Cocoa 深入理解KVO</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>深入理解KVO<br>……</p>
-        
-          <p class="article-more-link">
-            <a href="/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/#more">Read More</a>
-          </p>
-        
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" data-id="ck7yqfult00002fjh4qt839ml" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/" data-id="ck8hkauuy001eotjh99k0364r" class="article-share-link">Share</a>
       
       
     </footer>
@@ -1181,7 +1193,7 @@
   <div class="widget-wrap">
     <h3 class="widget-title">Archives</h3>
     <div class="widget">
-      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/03/">March 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/02/">February 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/11/">November 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/10/">October 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/09/">September 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/09/">September 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/06/">June 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/04/">April 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/01/">January 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/12/">December 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/10/">October 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/09/">September 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/05/">May 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/04/">April 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">February 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/01/">January 2017</a></li></ul>
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/04/">April 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/03/">March 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/02/">February 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/11/">November 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/10/">October 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/09/">September 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/09/">September 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/06/">June 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/04/">April 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/01/">January 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/12/">December 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/10/">October 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/09/">September 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/05/">May 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/04/">April 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">February 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/01/">January 2017</a></li></ul>
     </div>
   </div>
 
@@ -1194,6 +1206,14 @@
       <ul>
         
           <li>
+            <a href="/2020/04/01/MachOObjC/">MachO（一） ObjC类结构的加载</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/25/DobbyRead/">Dobby源码学习（一） Inline Hook</a>
+          </li>
+        
+          <li>
             <a href="/2020/03/19/cocoapods-new-feature/">cocoapods 新feature 开发 Example, On Demand Resource</a>
           </li>
         
@@ -1203,14 +1223,6 @@
         
           <li>
             <a href="/2020/03/03/macholinkedit/">dyld(1) MachO Linkedit 段</a>
-          </li>
-        
-          <li>
-            <a href="/2020/02/19/crashruntimeinfo/">Block ABI 文档阅读</a>
-          </li>
-        
-          <li>
-            <a href="/2020/02/12/iosdevdebug/">iOS开发必备的问题定位调试技巧</a>
           </li>
         
       </ul>

@@ -5,16 +5,13 @@
   
 
   
-  <title>dyld(1) MachO Linkedit 段 | xiejunyi Blog</title>
+  <title>Archives: 2020/4 | xiejunyi Blog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="description" content="Linkedit 段 包含了动态链接相关的数据信息，dyld基于linkedit段提供的数据进行动态链接，想要了解dyld的工作原理和流程，研究一下linkedit段的内容是个不错的方式。 DyldInfo符号绑定 Binding Info &amp;amp;&amp;amp; Lazy Binding Info123456789101112&#x2F;* * Dyld binds an image during the">
-<meta property="og:type" content="article">
-<meta property="og:title" content="dyld(1) MachO Linkedit 段">
-<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;03&#x2F;03&#x2F;macholinkedit&#x2F;index.html">
+  <meta property="og:type" content="website">
+<meta property="og:title" content="xiejunyi Blog">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;archives&#x2F;2020&#x2F;04&#x2F;index.html">
 <meta property="og:site_name" content="xiejunyi Blog">
-<meta property="og:description" content="Linkedit 段 包含了动态链接相关的数据信息，dyld基于linkedit段提供的数据进行动态链接，想要了解dyld的工作原理和流程，研究一下linkedit段的内容是个不错的方式。 DyldInfo符号绑定 Binding Info &amp;amp;&amp;amp; Lazy Binding Info123456789101112&#x2F;* * Dyld binds an image during the">
 <meta property="og:locale" content="en">
-<meta property="og:updated_time" content="2020-03-26T14:50:59.592Z">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternate" href="/atom.xml" title="xiejunyi Blog" type="application/atom+xml">
@@ -62,65 +59,40 @@
   </div>
 </header>
       <div class="outer">
-        <section id="main"><article id="post-macholinkedit" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2020/03/03/macholinkedit/" class="article-date">
-  <time datetime="2020-03-03T12:51:29.000Z" itemprop="datePublished">2020-03-03</time>
-</a>
-    
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
+        <section id="main">
   
-    <h1 class="article-title" itemprop="name">
-      dyld(1) MachO Linkedit 段
+  
+    
+    
+      
+      
+      <section class="archives-wrap">
+        <div class="archive-year-wrap">
+          <a href="/archives/2020" class="archive-year">2020</a>
+        </div>
+        <div class="archives">
+    
+    <article class="archive-article archive-type-post">
+  <div class="archive-article-inner">
+    <header class="archive-article-header">
+      <a href="/2020/04/01/MachOObjC/" class="archive-article-date">
+  <time datetime="2020-04-01T13:11:42.000Z" itemprop="datePublished">Apr 1</time>
+</a>
+      
+  
+    <h1 itemprop="name">
+      <a class="archive-article-title" href="/2020/04/01/MachOObjC/">MachO（一） ObjC类结构的加载</a>
     </h1>
   
 
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Linkedit 段 包含了动态链接相关的数据信息，dyld基于linkedit段提供的数据进行动态链接，想要了解dyld的工作原理和流程，研究一下linkedit段的内容是个不错的方式。</p>
-<h2 id="DyldInfo"><a href="#DyldInfo" class="headerlink" title="DyldInfo"></a>DyldInfo</h2><h3 id="符号绑定-Binding-Info-amp-amp-Lazy-Binding-Info"><a href="#符号绑定-Binding-Info-amp-amp-Lazy-Binding-Info" class="headerlink" title="符号绑定 Binding Info &amp;&amp; Lazy Binding Info"></a>符号绑定 Binding Info &amp;&amp; Lazy Binding Info</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Dyld binds an image during the loading process, if the image</span></span><br><span class="line"><span class="comment"> * requires any pointers to be initialized to symbols in other images.  </span></span><br><span class="line"><span class="comment"> * The bind information is a stream of byte sized </span></span><br><span class="line"><span class="comment"> * opcodes whose symbolic names start with BIND_OPCODE_.</span></span><br><span class="line"><span class="comment"> * Conceptually the bind information is a table of tuples:</span></span><br><span class="line"><span class="comment"> *    &lt;seg-index, seg-offset, type, symbol-library-ordinal, symbol-name, addend&gt;</span></span><br><span class="line"><span class="comment"> * The opcodes are a compressed way to encode the table by only</span></span><br><span class="line"><span class="comment"> * encoding when a column changes.  In addition simple patterns</span></span><br><span class="line"><span class="comment"> * like for runs of pointers initialzed to the same value can be </span></span><br><span class="line"><span class="comment"> * encoded in a few bytes.</span></span><br><span class="line"><span class="comment"> */</span></span><br></pre></td></tr></table></figure>
-
-<p>seg-index: segment idx<br>seg-offset: offset<br>type<br>symbol-library-ordinal: 所在库的加载序号 LC_LOAD_DYLIB<br>symbol-name<br>addend</p>
-<p>通过 seg-index, seg-offset, symbol-library-ordinal 我们便可以确认符号在运行时的地址。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/03/03/macholinkedit/" data-id="ck8hkauut0014otjh98r5ga33" class="article-share-link">Share</a>
-      
-      
-    </footer>
+    </header>
   </div>
-  
-    
-<nav id="article-nav">
-  
-    <a href="/2020/03/04/lazybind/" id="article-nav-newer" class="article-nav-link-wrap">
-      <strong class="article-nav-caption">Newer</strong>
-      <div class="article-nav-title">
-        
-          dyld(2) lazy bind 和 dyld_stub_binder
-        
-      </div>
-    </a>
-  
-  
-    <a href="/2020/02/19/crashruntimeinfo/" id="article-nav-older" class="article-nav-link-wrap">
-      <strong class="article-nav-caption">Older</strong>
-      <div class="article-nav-title">Block ABI 文档阅读</div>
-    </a>
-  
-</nav>
-
-  
 </article>
+  
+  
+    </div></section>
+  
+
 
 </section>
         
