@@ -5,16 +5,16 @@
   
 
   
-  <title>dyld(1) MachO Linkedit 段 | xiejunyi Blog</title>
+  <title>imp_implementationWithBlock 的内部实现 trampoline | xiejunyi Blog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="description" content="Linkedit 段 包含了动态链接相关的数据信息，dyld基于linkedit段提供的数据进行动态链接，想要了解dyld的工作原理和流程，研究一下linkedit段的内容是个不错的方式。 DyldInfo符号绑定 Binding Info &amp;amp;&amp;amp; Lazy Binding Info123456789101112&#x2F;* * Dyld binds an image during the">
+  <meta name="description" content="imp_implementationWithBlock 把 block 转化为imp, 是如何实现的呢？ block的函数调用，需要传递block对象，这需要我们在 调用imp的时候，能够找到block对象。 看看objc是如何实现的。 具体实现的思路是，将block对象存在 trampoline’s data 中。trampoline data 和 text page offset 为2个pag">
 <meta property="og:type" content="article">
-<meta property="og:title" content="dyld(1) MachO Linkedit 段">
-<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;03&#x2F;03&#x2F;macholinkedit&#x2F;index.html">
+<meta property="og:title" content="imp_implementationWithBlock 的内部实现 trampoline">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;04&#x2F;10&#x2F;objcblockimp&#x2F;index.html">
 <meta property="og:site_name" content="xiejunyi Blog">
-<meta property="og:description" content="Linkedit 段 包含了动态链接相关的数据信息，dyld基于linkedit段提供的数据进行动态链接，想要了解dyld的工作原理和流程，研究一下linkedit段的内容是个不错的方式。 DyldInfo符号绑定 Binding Info &amp;amp;&amp;amp; Lazy Binding Info123456789101112&#x2F;* * Dyld binds an image during the">
+<meta property="og:description" content="imp_implementationWithBlock 把 block 转化为imp, 是如何实现的呢？ block的函数调用，需要传递block对象，这需要我们在 调用imp的时候，能够找到block对象。 看看objc是如何实现的。 具体实现的思路是，将block对象存在 trampoline’s data 中。trampoline data 和 text page offset 为2个pag">
 <meta property="og:locale" content="en">
-<meta property="og:updated_time" content="2020-03-26T14:50:59.592Z">
+<meta property="og:updated_time" content="2020-04-09T16:52:47.918Z">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternate" href="/atom.xml" title="xiejunyi Blog" type="application/atom+xml">
@@ -62,10 +62,10 @@
   </div>
 </header>
       <div class="outer">
-        <section id="main"><article id="post-macholinkedit" class="article article-type-post" itemscope itemprop="blogPost">
+        <section id="main"><article id="post-objcblockimp" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
-    <a href="/2020/03/03/macholinkedit/" class="article-date">
-  <time datetime="2020-03-03T12:51:29.000Z" itemprop="datePublished">2020-03-03</time>
+    <a href="/2020/04/10/objcblockimp/" class="article-date">
+  <time datetime="2020-04-09T16:26:43.000Z" itemprop="datePublished">2020-04-10</time>
 </a>
     
   </div>
@@ -76,7 +76,7 @@
         
   
     <h1 class="article-title" itemprop="name">
-      dyld(1) MachO Linkedit 段
+      imp_implementationWithBlock 的内部实现 trampoline
     </h1>
   
 
@@ -84,16 +84,18 @@
     
     <div class="article-entry" itemprop="articleBody">
       
-        <p>Linkedit 段 包含了动态链接相关的数据信息，dyld基于linkedit段提供的数据进行动态链接，想要了解dyld的工作原理和流程，研究一下linkedit段的内容是个不错的方式。</p>
-<h2 id="DyldInfo"><a href="#DyldInfo" class="headerlink" title="DyldInfo"></a>DyldInfo</h2><h3 id="符号绑定-Binding-Info-amp-amp-Lazy-Binding-Info"><a href="#符号绑定-Binding-Info-amp-amp-Lazy-Binding-Info" class="headerlink" title="符号绑定 Binding Info &amp;&amp; Lazy Binding Info"></a>符号绑定 Binding Info &amp;&amp; Lazy Binding Info</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Dyld binds an image during the loading process, if the image</span></span><br><span class="line"><span class="comment"> * requires any pointers to be initialized to symbols in other images.  </span></span><br><span class="line"><span class="comment"> * The bind information is a stream of byte sized </span></span><br><span class="line"><span class="comment"> * opcodes whose symbolic names start with BIND_OPCODE_.</span></span><br><span class="line"><span class="comment"> * Conceptually the bind information is a table of tuples:</span></span><br><span class="line"><span class="comment"> *    &lt;seg-index, seg-offset, type, symbol-library-ordinal, symbol-name, addend&gt;</span></span><br><span class="line"><span class="comment"> * The opcodes are a compressed way to encode the table by only</span></span><br><span class="line"><span class="comment"> * encoding when a column changes.  In addition simple patterns</span></span><br><span class="line"><span class="comment"> * like for runs of pointers initialzed to the same value can be </span></span><br><span class="line"><span class="comment"> * encoded in a few bytes.</span></span><br><span class="line"><span class="comment"> */</span></span><br></pre></td></tr></table></figure>
+        <p>imp_implementationWithBlock 把 block 转化为imp, 是如何实现的呢？</p>
+<p>block的函数调用，需要传递block对象，这需要我们在 调用imp的时候，能够找到block对象。 看看objc是如何实现的。</p>
+<p>具体实现的思路是，将block对象存在 trampoline’s data 中。trampoline data 和 text page offset 为2个page size(由申请的时候决定)</p>
+<p>返回的imp是一个跳板。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">IMP <span class="title">trampoline</span><span class="params">(<span class="keyword">int</span> aMode, <span class="keyword">uintptr_t</span> index)</span> </span>&#123;</span><br><span class="line">    assert(validIndex(index));</span><br><span class="line">    <span class="keyword">char</span> *base = (<span class="keyword">char</span> *)trampolinesForMode(aMode);</span><br><span class="line">    <span class="keyword">char</span> *imp = base + index*slotSize();</span><br><span class="line"><span class="meta">#<span class="meta-keyword">if</span> __arm__</span></span><br><span class="line">    imp++;  <span class="comment">// trampoline is Thumb instructions</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">if</span> __has_feature(ptrauth_calls)</span></span><br><span class="line">    imp = ptrauth_sign_unauthenticated(imp,</span><br><span class="line">                                        ptrauth_key_function_pointer, <span class="number">0</span>);</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">    <span class="keyword">return</span> (IMP)imp;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
-<p>seg-index: segment idx<br>seg-offset: offset<br>type<br>symbol-library-ordinal: 所在库的加载序号 LC_LOAD_DYLIB<br>symbol-name<br>addend</p>
-<p>通过 seg-index, seg-offset, symbol-library-ordinal 我们便可以确认符号在运行时的地址。</p>
-
+<p>执行时，TrampolineEntry 为跳板，通过 偏移量取到 block对象，随后进行调用。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">L_objc_blockTrampolineImpl:</span><br><span class="line">	/*</span><br><span class="line">	 x0  == self</span><br><span class="line">	 x17 == address of called trampoline&apos;s data (2 pages before its code)</span><br><span class="line">	 lr  == original return address</span><br><span class="line">	 */</span><br><span class="line"></span><br><span class="line">	mov  x1, x0                  // _cmd = self</span><br><span class="line">	ldr  p0, [x17]               // self = block object</span><br><span class="line">	add  p15, p0, #BLOCK_INVOKE  // x15 = &amp;block-&gt;invoke</span><br><span class="line">	ldr  p16, [x15]              // x16 = block-&gt;invoke</span><br><span class="line">	TailCallBlockInvoke x16, x15</span><br><span class="line"></span><br><span class="line">	// pad up to TrampolineBlockPagePair header size</span><br><span class="line">	nop</span><br><span class="line">	nop</span><br><span class="line">	nop</span><br><span class="line">	</span><br><span class="line">.macro TrampolineEntry</span><br><span class="line">	// load address of trampoline data (two pages before this instruction)</span><br><span class="line">	adr  x17, -2*PAGE_MAX_SIZE</span><br><span class="line">	b    L_objc_blockTrampolineImpl</span><br><span class="line">.endmacro</span><br></pre></td></tr></table></figure>
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/03/03/macholinkedit/" data-id="ck8t00np70017lrjha4izfmyf" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/04/10/objcblockimp/" data-id="ck8t00np50011lrjh7z698ukl" class="article-share-link">Share</a>
       
       
     </footer>
@@ -102,19 +104,10 @@
     
 <nav id="article-nav">
   
-    <a href="/2020/03/04/lazybind/" id="article-nav-newer" class="article-nav-link-wrap">
-      <strong class="article-nav-caption">Newer</strong>
-      <div class="article-nav-title">
-        
-          dyld(2) lazy bind 和 dyld_stub_binder
-        
-      </div>
-    </a>
   
-  
-    <a href="/2020/02/19/crashruntimeinfo/" id="article-nav-older" class="article-nav-link-wrap">
+    <a href="/2020/04/08/lliread/" id="article-nav-older" class="article-nav-link-wrap">
       <strong class="article-nav-caption">Older</strong>
-      <div class="article-nav-title">Block ABI 文档阅读</div>
+      <div class="article-nav-title">lli源码阅读</div>
     </a>
   
 </nav>
