@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+
+  
+  <title>理解 Objc Runtime | xiejunyi Blog</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="Runtime 是什么一个用C和汇编语言写的Runtime库,来动态 创建类和对象、进行消息传递和转发。（在运行时执行部分编译后的代码） Objective-CObjective-C 扩展了 C 语言，并加入了面向对象特性和 Smalltalk 式的消息传递机制。而这个扩展的核心是一个用 C 和 编译语言 写的 Runtime 库。它是 Objective-C 面向对象和动态机制的基石。 Obje">
+<meta property="og:type" content="article">
+<meta property="og:title" content="理解 Objc Runtime">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2017&#x2F;02&#x2F;06&#x2F;%E6%B7%B1%E5%85%A5Objc-Runtime&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="Runtime 是什么一个用C和汇编语言写的Runtime库,来动态 创建类和对象、进行消息传递和转发。（在运行时执行部分编译后的代码） Objective-CObjective-C 扩展了 C 语言，并加入了面向对象特性和 Smalltalk 式的消息传递机制。而这个扩展的核心是一个用 C 和 编译语言 写的 Runtime 库。它是 Objective-C 面向对象和动态机制的基石。 Obje">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2018-05-26T11:27:55.000Z">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="xiejunyi Blog" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">xiejunyi Blog</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-深入Objc-Runtime" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/" class="article-date">
+  <time datetime="2017-02-06T07:03:59.000Z" itemprop="datePublished">2017-02-06</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/iOS/">iOS</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      理解 Objc Runtime
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h2 id="Runtime-是什么"><a href="#Runtime-是什么" class="headerlink" title="Runtime 是什么"></a>Runtime 是什么</h2><p>一个用C和汇编语言写的Runtime库,来动态 创建类和对象、进行消息传递和转发。<br>（在运行时执行部分编译后的代码）</p>
+<h2 id="Objective-C"><a href="#Objective-C" class="headerlink" title="Objective-C"></a>Objective-C</h2><p>Objective-C 扩展了 C 语言，并加入了面向对象特性和 Smalltalk 式的消息传递机制。而这个扩展的核心是一个用 C 和 编译语言 写的 Runtime 库。它是 Objective-C 面向对象和动态机制的基石。</p>
+<p>Objective-C 是一个动态语言，这意味着它不仅需要一个编译器，也需要一个运行时系统来动态 创建类和对象、进行消息传递和转发。理解 Objective-C 的 Runtime 机制可以帮我们更好的了解这个语言，适当的时候还能对语言进行扩展，从系统层面解决项目中的一些设计或技术问题。 Runtime的核心是 - 消息传递 （Messaging）。(动态调度)</p>
+<h2 id="Runtime-原理的概述"><a href="#Runtime-原理的概述" class="headerlink" title="Runtime 原理的概述"></a>Runtime 原理的概述</h2><p>Objective-C的是一个运行时面向语言，这意味着当它可能在运行时决定如何实现而不是在编译期。 这给你很大的灵活性，你可以根据需要将消息重定向到适当的对象，或者甚至有意交换方法实现等。如果我们将它与C语言进行对比。</p>
+<p>在很多语言，比如 C ，调用一个方法其实就是跳到内存中的某一点并开始执行一段代码。没有任何动态的特性，因为这在编译时就决定好了。而在 Objective-C 中，[object foo] 语法并不会立即执行 foo 这个方法的代码。它是在运行时给 object 发送一条叫 foo 的消息。这个消息，也许会由 object 来处理，也许会被转发给另一个对象，或者不予理睬假装没收到这个消息。多条不同的消息也可以对应同一个方法实现。这些都是在程序运行的时候决定的。</p>
+<h3 id="什么是Objective-C运行时？"><a href="#什么是Objective-C运行时？" class="headerlink" title="什么是Objective-C运行时？"></a>什么是Objective-C运行时？</h3><p>Objective-C运行时是一个运行库，它是一个主要在C＆Assembler中编写的库，它将面向对象的功能添加到C中以创建Objective-C。 这意味着它加载类信息，所有方法调度，方法转发等。Objective-C运行时本质上创建所有支持结构，使面向对象的编程与Objective-C可能。</p>
+<h3 id="Objective-C-类和对象"><a href="#Objective-C-类和对象" class="headerlink" title="Objective-C 类和对象"></a>Objective-C 类和对象</h3><p>Objective-c类本身也是对象，而运行时通过创建Meta类处理这一点。 当你发送一个消息，如[NSObject alloc]，你实际上是发送一个消息到类对象，该类对象需要是一个MetaClass的实例，它本身是根元类的实例。 而如果你说NSObject的子类，你的类指向NSObject作为它的超类。 然而，所有元类都指向根元类作为它们的超类。 所有的元类都只有它们响应的消息的方法列表的类方法。 所以当你发送消息到类对象，如[NSObject alloc]，然后objc_msgSend（）实际上通过元类查看它的响应，然后如果它找到一个方法，操作类对象。</p>
+<h4 id="为什么Objective-C的对象都要继承-NSObject"><a href="#为什么Objective-C的对象都要继承-NSObject" class="headerlink" title="为什么Objective-C的对象都要继承 NSObject"></a>为什么Objective-C的对象都要继承 NSObject</h4><p>最初当你开始Cocoa开发，你可能没注意到我们的类一直都恪守着继承自NSObject的写法，有一件事你甚至没有意识到，发生在你身上的是将对象设置为使用Objective-C运行时。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">MyObject *object = [[MyObject alloc] init];</span><br></pre></td></tr></table></figure>
+
+<p>执行的第一个消息是+ alloc。 如果你看看文档，它说“新实例的isa实例变量被初始化为描述类的数据结构;所有其他实例变量的内存设置为0” 所以通过继承NSObject类，我们不仅继承了一些伟大的属性，而且我们继承了在内存中容易地分配和创建我们的对象的能力.</p>
+<h3 id="那么什么是类缓存？-（objc-cache-cache）"><a href="#那么什么是类缓存？-（objc-cache-cache）" class="headerlink" title="那么什么是类缓存？ （objc_cache * cache）"></a>那么什么是类缓存？ （objc_cache * cache）</h3><p>你或许在源码中发现了 Cache cache;</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> objc_class : objc_object &#123;</span><br><span class="line">    Class superclass;</span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">char</span> *name;</span><br><span class="line">    uint32_t version;</span><br><span class="line">    uint32_t info;</span><br><span class="line">    uint32_t instance_size;</span><br><span class="line">    <span class="keyword">struct</span> old_ivar_list *ivars;</span><br><span class="line">    <span class="keyword">struct</span> old_method_list **methodLists;</span><br><span class="line">    Cache cache;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>看看它是什么样的结构体:</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> objc_cache &#123;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> mask <span class="comment">/* total = mask + 1 */</span>                 OBJC2_UNAVAILABLE;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> occupied                                    OBJC2_UNAVAILABLE;</span><br><span class="line">    Method buckets[<span class="number">1</span>]                                        OBJC2_UNAVAILABLE;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>可以看到一个类中 有 一个存放方法列表的数据结构,那么它到底用来干嘛的呢?</p>
+<p>一个 class 往往只有 20% 的函数会被经常调用，可能占总调用次数的 80% 。每个消息都需要遍历一次 objc_method_list 并不合理。如果把经常被调用的函数缓存下来，那可以大大提高函数查询的效率。这也就是 objc_class 中另一个重要成员 objc_cache 做的事情 - 再找到 foo 之后，把 foo 的 method_name 作为 key ，method_imp 作为 value 给存起来。当再次收到 foo 消息的时候，可以直接在 cache 里找到，避免去遍历 objc_method_list.<br>(Hash表的方法实现)</p>
+<p>当Objective-C运行时通过跟踪它的isa指针检查对象时，它可以找到一个实现许多方法的对象。然而，你可能只调用它们的一小部分，并且每次查找时，搜索所有选择器的类分派表没有意义。所以类实现一个缓存，每当你搜索一个类分派表，并找到相应的选择器，它把它放入它的缓存。所以当objc_msgSend（）查找一个类的选择器，它首先搜索类缓存。这是基于这样的理论：如果你在类上调用一个消息，你可能以后再次调用该消息。所以如果我们考虑到这一点，这意味着如果我们有一个NSObject子类，名为MyObject并运行以下代码</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">MyObject *obj = [[MyObject alloc] init];</span><br><span class="line"></span><br><span class="line">@implementation MyObject</span><br><span class="line">-(id)init &#123;</span><br><span class="line">    if(self = [super init])&#123;</span><br><span class="line">        [self setVarA:@”blah”];</span><br><span class="line">    &#125;</span><br><span class="line">    return self;</span><br><span class="line">&#125;</span><br><span class="line">@end</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="消息发送"><a href="#消息发送" class="headerlink" title="消息发送"></a>消息发送</h2><blockquote>
+<p>I’m sorry that I long ago coined the term “objects” for this topic because it gets many people to focus on the lesser idea. The big idea is “messaging” – that is what the kernal[sic] of Smalltalk is all about… The key in making great and growable systems is much more to design how its modules communicate rather than what their internal properties and behaviors should be.</p>
+</blockquote>
+<p>Alan Kay 曾多次强调 Smalltalk 的核心不是面向对象，面向对象只是 the lesser ideas，<strong>消息传递</strong> 才是 the big idea。</p>
+<p>消息传递的关键藏于 objc_object 中的 isa 指针和 objc_class 中的 class dispatch table。</p>
+<p>在 Objective-C 中，类、对象和方法都是一个 C 的结构体，从 objc/objc.h 头文件中，我们可以找到他们的定义：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">struct objc_class : objc_object &#123;</span><br><span class="line">    Class superclass;</span><br><span class="line">    const char *name;</span><br><span class="line">    uint32_t version;</span><br><span class="line">    uint32_t info;</span><br><span class="line">    uint32_t instance_size;</span><br><span class="line">    struct old_ivar_list *ivars;</span><br><span class="line">    struct old_method_list **methodLists;</span><br><span class="line">    Cache cache;</span><br><span class="line">    struct old_protocol_list *protocols;</span><br><span class="line">    // CLS_EXT only</span><br><span class="line">    const uint8_t *ivar_layout;</span><br><span class="line">    struct old_class_ext *ext;</span><br><span class="line">    /.../</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>struct objc_ivar_list <em>ivars            OBJC2_UNAVAILABLE;  // 该类的成员变量链表<br>struct objc_method_list *</em>methodLists   OBJC2_UNAVAILABLE;  // 方法定义的链表</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">struct old_ivar_list &#123;</span><br><span class="line">    int ivar_count;</span><br><span class="line">#ifdef __LP64__</span><br><span class="line">    int space;</span><br><span class="line">#endif</span><br><span class="line">    /* variable length structure */</span><br><span class="line">    struct old_ivar ivar_list[1];</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">struct old_method_list &#123;</span><br><span class="line">    void *obsolete;</span><br><span class="line"></span><br><span class="line">    int method_count;</span><br><span class="line">#ifdef __LP64__</span><br><span class="line">    int space;</span><br><span class="line">#endif</span><br><span class="line">    /* variable length structure */</span><br><span class="line">    // 可变长的方法数组</span><br><span class="line">    struct old_method method_list[1];</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>objc_method_list 本质是一个有 objc_method 元素的可变长度的数组。一个 objc_method 结构体中有函数名，也就是SEL，有表示函数类型的字符串 (见 Type Encoding) ，以及函数的实现IMP。</p>
+<blockquote>
+<p>这里有一些你可能感兴趣的代码: Cache,protocol_List,class_extension</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">typedef struct objc_cache *Cache                             OBJC2_UNAVAILABLE;</span><br><span class="line"></span><br><span class="line">#define CACHE_BUCKET_NAME(B)  ((B)-&gt;method_name)</span><br><span class="line">#define CACHE_BUCKET_IMP(B)   ((B)-&gt;method_imp)</span><br><span class="line">#define CACHE_BUCKET_VALID(B) (B)</span><br><span class="line">#ifndef __LP64__</span><br><span class="line">#define CACHE_HASH(sel, mask) (((uintptr_t)(sel)&gt;&gt;2) &amp; (mask))</span><br><span class="line">#else</span><br><span class="line">#define CACHE_HASH(sel, mask) (((unsigned int)((uintptr_t)(sel)&gt;&gt;3)) &amp; (mask))</span><br><span class="line">#endif</span><br><span class="line">struct objc_cache &#123;</span><br><span class="line">    unsigned int mask /* total = mask + 1 */                 OBJC2_UNAVAILABLE;</span><br><span class="line">    unsigned int occupied                                    OBJC2_UNAVAILABLE;</span><br><span class="line">    Method buckets[1]                                        OBJC2_UNAVAILABLE;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">struct old_protocol_list &#123;</span><br><span class="line">    struct old_protocol_list *next;</span><br><span class="line">    long count;</span><br><span class="line">    struct old_protocol *list[1];</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">struct old_class_ext &#123;</span><br><span class="line">    uint32_t size;</span><br><span class="line">    const uint8_t *weak_ivar_layout;</span><br><span class="line">    struct old_property_list **propertyLists;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p><strong>好了 接下来让我们接触Runtime的核心机制，消息机制</strong></p>
+<h3 id="消息发送的步骤"><a href="#消息发送的步骤" class="headerlink" title="消息发送的步骤"></a>消息发送的步骤</h3><ol>
+<li>Check for ignored selectors (GC) and short-circuit.如果 selector 是需要被忽略的垃圾回收用到的方法，则将 IMP 结果设为 _objc_ignored_method，这是个汇编程序入口，可以理解为一个标记。(OSX)</li>
+<li>Check for nil target.检查对象是否为nil<ul>
+<li>If nil &amp; nil receiver handler configured, jump to handler</li>
+<li>If nil &amp; no handler (default), cleanup and return.</li>
+</ul>
+</li>
+<li>Search the class’s method cache for the method IMP 在cache 中查找IMP<ul>
+<li>If found, jump to it.找到，跳转到相应的内存地址</li>
+<li>Not found: lookup the method IMP in the class itself 未找到，在类的method_list中查找<ul>
+<li>If found, jump to it.找到，跳转</li>
+<li>If not found, jump to forwarding mechanism.未找到，进入消息分发的步骤</li>
+</ul>
+</li>
+</ul>
+</li>
+</ol>
+<h3 id="消息分发的步骤"><a href="#消息分发的步骤" class="headerlink" title="消息分发的步骤"></a>消息分发的步骤</h3><ul>
+<li>在对象类的 dispatch table 中尝试找到该消息。如果找到了，跳到相应的函数IMP去执行实现代码；</li>
+<li>如果没有找到，Runtime 会发送 +resolveInstanceMethod: 或者 +resolveClassMethod: 尝试去 resolve 这个消息；</li>
+<li>如果 resolve 方法返回 NO，Runtime 就发送 -forwardingTargetForSelector: 允许你把这个消息转发给另一个对象；</li>
+<li>如果没有新的目标对象返回， Runtime 就会发送 -methodSignatureForSelector: 和 -forwardInvocation: 消息。你可以发送 -invokeWithTarget: 消息来手动转发消息或者发送 -doesNotRecognizeSelector: 抛出异常。</li>
+</ul>
+<ol>
+<li>resolveInstanceMethod/resolveClassMethod 方法解析，这里可以动态添加方法（添加了即可返回YES)</li>
+<li>forwardingTargetForSelector 把Selector 转发给其他实例响应</li>
+<li>methodSignatureForSelector,invokeWithTarget,doesNotRecognizeSelector 添加方法签名，让其他实例来处理方法的调用</li>
+</ol>
+<blockquote>
+<p>关于objc_msgSend函数<br>事实上，在编译时你写的 Objective-C 函数调用的语法都会被翻译成一个 C 的函数调用 - objc_msgSend() 。</p>
+</blockquote>
+<p><strong>关于消息分发三个步骤的Example:</strong></p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//  第一步</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 成功解析的实例方法</span></span><br><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> + (BOOL)resolveInstanceMethod:(SEL)sel &#123;</span></span><br><span class="line"><span class="comment"> NSString *selectorString = NSStringFromSelector(sel);</span></span><br><span class="line"><span class="comment"> if ([selectorString isEqualToString:@"mysteriousMethod"]) &#123;</span></span><br><span class="line"><span class="comment"> class_addMethod(self.class, @selector(mysteriousMethod), (IMP)functionForMethod1, "@:");</span></span><br><span class="line"><span class="comment"> &#125;</span></span><br><span class="line"><span class="comment"> return [super resolveInstanceMethod:sel];</span></span><br><span class="line"><span class="comment"> &#125;</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"></span><br><span class="line"><span class="comment">//  在没有找到方法时，会先调用此方法，可用于动态添加方法</span></span><br><span class="line"><span class="comment">//  返回 YES 表示相应 selector 的实现已经被找到并添加到了类中，否则返回 NO</span></span><br><span class="line">+ (<span class="built_in">BOOL</span>)resolveInstanceMethod:(SEL)sel &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">YES</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">//  第二步</span></span><br><span class="line"><span class="comment">//  如果第一步的返回 NO 或者直接返回了 YES 而没有添加方法，该方法被调用</span></span><br><span class="line"><span class="comment">//  在这个方法中，我们可以指定一个可以返回一个可以响应该方法的对象</span></span><br><span class="line"><span class="comment">//  如果返回 self 就会死循环</span></span><br><span class="line">- (<span class="keyword">id</span>)forwardingTargetForSelector:(SEL)aSelector</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span>(aSelector == <span class="keyword">@selector</span>(xxx:))&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">self</span>.alternateObject;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> [<span class="keyword">super</span> forwardingTargetForSelector:aSelector];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">//  第三步</span></span><br><span class="line"><span class="comment">//  如果 `forwardingTargetForSelector:` 返回了 nil，则该方法会被调用，系统会询问我们要一个合法的『类型编码(Type Encoding)』</span></span><br><span class="line"><span class="comment">//  若返回 nil，则不会进入下一步，而是无法处理消息</span></span><br><span class="line"></span><br><span class="line">- (<span class="built_in">NSMethodSignature</span> *)methodSignatureForSelector:(SEL)aSelector &#123;</span><br><span class="line">    <span class="keyword">return</span> [<span class="built_in">NSMethodSignature</span> signatureWithObjCTypes:<span class="string">"v@:"</span>];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 当实现了此方法后，-doesNotRecognizeSelector: 将不会被调用</span></span><br><span class="line"><span class="comment">// 如果要测试找不到方法，可以注释掉这一个方法</span></span><br><span class="line"><span class="comment">// 在这里进行消息转发</span></span><br><span class="line">- (<span class="keyword">void</span>)forwardInvocation:(<span class="built_in">NSInvocation</span> *)anInvocation &#123;</span><br><span class="line">    <span class="comment">// 我们还可以改变方法选择器</span></span><br><span class="line">    [anInvocation setSelector:<span class="keyword">@selector</span>(notFind)];</span><br><span class="line">    <span class="comment">// 改变方法选择器后，还需要指定接受者</span></span><br><span class="line">    [anInvocation invokeWithTarget:<span class="keyword">self</span>];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">- (<span class="keyword">void</span>)notFind &#123;</span><br><span class="line">    <span class="built_in">NSLog</span>(<span class="string">@"没有实现 -mysteriousMethod 方法，并且成功的转成了 -notFind 方法"</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p><strong>你可能忽略了一个细节 V-Table</strong><br>如果你学过C++，你可能会了解到Hybrid vTable Dispatch（虚拟表分发）.<br>你可以参考我的这篇文章<a href="https://junyixie.github.io/2017/04/29/Swift-方法调用/" target="_blank" rel="noopener">iOS 调用机制</a></p>
+<h3 id="Hybrid-vTable-Dispatch"><a href="#Hybrid-vTable-Dispatch" class="headerlink" title="Hybrid vTable Dispatch"></a>Hybrid vTable Dispatch</h3><p>新的 Objc-runtime-new.m 这样写到</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">/***********************************************************************</span><br><span class="line">* vtable dispatch</span><br><span class="line">*</span><br><span class="line">* Every class gets a vtable pointer. The vtable is an array of IMPs.</span><br><span class="line">* The selectors represented in the vtable are the same for all classes</span><br><span class="line">*   (i.e. no class has a bigger or smaller vtable).</span><br><span class="line">* Each vtable index has an associated trampoline which dispatches to</span><br><span class="line">*   the IMP at that index for the receiver class&apos;s vtable (after</span><br><span class="line">*   checking for NULL). Dispatch fixup uses these trampolines instead</span><br><span class="line">*   of objc_msgSend.</span><br><span class="line">* Fragility: The vtable size and list of selectors is chosen at launch</span><br><span class="line">*   time. No compiler-generated code depends on any particular vtable</span><br><span class="line">*   configuration, or even the use of vtable dispatch at all.</span><br><span class="line">* Memory size: If a class&apos;s vtable is identical to its superclass&apos;s</span><br><span class="line">*   (i.e. the class overrides none of the vtable selectors), then</span><br><span class="line">*   the class points directly to its superclass&apos;s vtable. This means</span><br><span class="line">*   selectors to be included in the vtable should be chosen so they are</span><br><span class="line">*   (1) frequently called, but (2) not too frequently overridden. In</span><br><span class="line">*   particular, -dealloc is a bad choice.</span><br><span class="line">* Forwarding: If a class doesn&apos;t implement some vtable selector, that</span><br><span class="line">*   selector&apos;s IMP is set to objc_msgSend in that class&apos;s vtable.</span><br><span class="line">* +initialize: Each class keeps the default vtable (which always</span><br><span class="line">*   redirects to objc_msgSend) until its +initialize is completed.</span><br><span class="line">*   Otherwise, the first message to a class could be a vtable dispatch,</span><br><span class="line">*   and the vtable trampoline doesn&apos;t include +initialize checking.</span><br><span class="line">* Changes: Categories, addMethod, and setImplementation all force vtable</span><br><span class="line">*   reconstruction for the class and all of its subclasses, if the</span><br><span class="line">*   vtable selectors are affected.</span><br><span class="line">**********************************************************************/</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">static const char * const defaultVtable[] = &#123;</span><br><span class="line">    &quot;allocWithZone:&quot;,</span><br><span class="line">    &quot;alloc&quot;,</span><br><span class="line">    &quot;class&quot;,</span><br><span class="line">    &quot;self&quot;,</span><br><span class="line">    &quot;isKindOfClass:&quot;,</span><br><span class="line">    &quot;respondsToSelector:&quot;,</span><br><span class="line">    &quot;isFlipped&quot;,</span><br><span class="line">    &quot;length&quot;,</span><br><span class="line">    &quot;objectForKey:&quot;,</span><br><span class="line">    &quot;count&quot;,</span><br><span class="line">    &quot;objectAtIndex:&quot;,</span><br><span class="line">    &quot;isEqualToString:&quot;,</span><br><span class="line">    &quot;isEqual:&quot;,</span><br><span class="line">    &quot;retain&quot;,</span><br><span class="line">    &quot;release&quot;,</span><br><span class="line">    &quot;autorelease&quot;,</span><br><span class="line">&#125;;</span><br><span class="line">static const char * const defaultVtableGC[] = &#123;</span><br><span class="line">    &quot;allocWithZone:&quot;,</span><br><span class="line">    &quot;alloc&quot;,</span><br><span class="line">    &quot;class&quot;,</span><br><span class="line">    &quot;self&quot;,</span><br><span class="line">    &quot;isKindOfClass:&quot;,</span><br><span class="line">    &quot;respondsToSelector:&quot;,</span><br><span class="line">    &quot;isFlipped&quot;,</span><br><span class="line">    &quot;length&quot;,</span><br><span class="line">    &quot;objectForKey:&quot;,</span><br><span class="line">    &quot;count&quot;,</span><br><span class="line">    &quot;objectAtIndex:&quot;,</span><br><span class="line">    &quot;isEqualToString:&quot;,</span><br><span class="line">    &quot;isEqual:&quot;,</span><br><span class="line">    &quot;hash&quot;,</span><br><span class="line">    &quot;addObject:&quot;,</span><br><span class="line">    &quot;countByEnumeratingWithState:objects:count:&quot;,</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p><strong>Runtime 通过 vTable 的方式 加速调用类的常用方法。</strong></p>
+<h2 id="Category"><a href="#Category" class="headerlink" title="Category"></a>Category</h2><p>但是category则完全不一样，它是在运行期决议的。<br>就category和extension的区别来看，我们可以推导出一个明显的事实，extension可以添加实例变量，而category是无法添加实例变量的（因为在运行期，对象的内存布局已经确定，如果添加实例变量就会破坏类的内部布局，这对编译型语言来说是灾难性的）</p>
+<h3 id="category和-load方法"><a href="#category和-load方法" class="headerlink" title="-category和+load方法"></a>-category和+load方法</h3><p>我们知道，在类和category中都可以有+load方法，那么有两个问题：<br>1)、在类的+load方法调用的时候，我们可以调用category中声明的方法么？<br>2)、这么些个+load方法，调用顺序是咋样的呢？</p>
+<p>1)、可以调用，因为附加category到类的工作会先于+load方法的执行<br>2)、+load的执行顺序是先类，后category，而category的+load执行顺序是根据编译顺序决定的。</p>
+<blockquote>
+<p>部分内容引用和翻译自<br><a href="http://www.friday.com/bbum/2009/12/18/objc_msgsend-part-1-the-road-map/" target="_blank" rel="noopener">http://www.friday.com/bbum/2009/12/18/objc_msgsend-part-1-the-road-map/</a><br><a href="http://cocoasamurai.blogspot.com/2010/01/understanding-objective-c-runtime.html" target="_blank" rel="noopener">http://cocoasamurai.blogspot.com/2010/01/understanding-objective-c-runtime.html</a></p>
+</blockquote>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/" data-id="cka5hgshf001inn2a6thtd1uv" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+    <a href="/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          Cocoa 深入理解KVO
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2017/02/01/Objective-C-weak-%E5%85%B3%E9%94%AE%E5%AD%97-%E5%AE%9E%E7%8E%B0-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">Objective-C weak 关键字 实现 源码分析</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Categories</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/APM/">APM</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/Hook/">Hook</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/iOS/">iOS</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/">源码分析</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E7%A0%94%E5%8F%91%E6%B5%81%E7%A8%8B/">研发流程</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%AE%BE%E8%AE%A1%E6%9E%B6%E6%9E%84/">设计架构</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/04/">April 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/03/">March 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/02/">February 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/11/">November 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/10/">October 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/09/">September 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/09/">September 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/06/">June 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/04/">April 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/01/">January 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/12/">December 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/10/">October 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/09/">September 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/05/">May 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/04/">April 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">February 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/01/">January 2017</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/04/10/objcblockimp/">imp_implementationWithBlock 的内部实现 trampoline</a>
+          </li>
+        
+          <li>
+            <a href="/2020/04/08/lliread/">lli源码阅读</a>
+          </li>
+        
+          <li>
+            <a href="/2020/04/01/MachOObjC/">MachO（一） ObjC类结构的加载</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/25/DobbyRead/">Dobby源码学习（一） Inline Hook</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/19/cocoapods-new-feature/">cocoapods 新feature 开发 Example, On Demand Resource</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2020 junyixie<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+
+
+  </div>
+</body>
+</html>

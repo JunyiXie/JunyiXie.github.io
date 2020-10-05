@@ -61,6 +61,62 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-projectpodenv" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/11/26/projectpodenv/" class="article-date">
+  <time datetime="2019-11-26T15:41:18.000Z" itemprop="datePublished">2019-11-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E7%A0%94%E5%8F%91%E6%B5%81%E7%A8%8B/">研发流程</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/11/26/projectpodenv/">CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>CocoaPods是主流的iOS工程依赖管理工具。我们在使用CocoaPods管理工程的过程中，经常面对各种定制化的需求。CocoaPods提供的插件机制可以帮助我们定制CocoaPods。随着插件的增多，管理插件也成为了蛋疼的问题…… 本片文章介绍如何利用Bundler管理项目插件。</p>
+<h2 id="Bundler"><a href="#Bundler" class="headerlink" title="Bundler"></a>Bundler</h2><p>Bundler是Ruby的依赖管理工具，通过Gemfile可以指定项目依赖的ruby gems。通过bundle install 进行安装。bundle exec 执行。</p>
+<h3 id="Gemfile"><a href="#Gemfile" class="headerlink" title="Gemfile"></a>Gemfile</h3><p>和 podfile 挺像的,可以类比一下。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"># 指定了gem源</span><br><span class="line">source &apos;https://rubygems.org&apos; </span><br><span class="line"></span><br><span class="line"># 指定 gem 及其 版本 </span><br><span class="line">gem &apos;nokogiri&apos;</span><br><span class="line">gem &apos;rack&apos;, &apos;~&gt; 2.0.1&apos;</span><br><span class="line">gem &apos;rspec&apos;</span><br></pre></td></tr></table></figure>
+
+<h3 id="bundle-install"><a href="#bundle-install" class="headerlink" title="bundle install"></a>bundle install</h3><p>bundle install 会安装 Gemfile指定的依赖。</p>
+<h3 id="bundle-exec"><a href="#bundle-exec" class="headerlink" title="bundle exec"></a>bundle exec</h3><p>bundle exec 将会在 bundle install 依赖安装后的环境中执行 命令。</p>
+<blockquote>
+<p>This command executes the command, making all gems specified in the Gemfile(5) available to require in Ruby programs.</p>
+</blockquote>
+<p><strong>上面巴拉巴拉说了一堆，总之就是</strong></p>
+<ol>
+<li>把依赖写进 Gemfile 里</li>
+<li>bundle install 安装依赖</li>
+<li>bundle exec 在安装依赖后的环境中执行命令</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2019/11/26/projectpodenv/" data-id="ckfw44fwq001bvscfeamvd5b8" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+</article>
+
+
+  
     <article id="post-cocoapodsdev" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/10/05/cocoapodsdev/" class="article-date">
@@ -129,7 +185,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2019/10/05/cocoapodsdev/" data-id="ck8t00np0000qlrjh9b12aodn" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2019/10/05/cocoapodsdev/" data-id="ckfw44fwd000kvscf9ldi0299" class="article-share-link">Share</a>
       
       
     </footer>
@@ -227,7 +283,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2019/09/28/CrashMonitorSystem/" data-id="ck8t00nom000dlrjhh9ime2cb" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2019/09/28/CrashMonitorSystem/" data-id="ckfw44fw10007vscfgv2c1r1c" class="article-share-link">Share</a>
       
       
     </footer>
@@ -299,7 +355,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" data-id="ck8t00noy000nlrjh1mhscmax" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" data-id="ckfw44fwj000tvscf1wi68gmo" class="article-share-link">Share</a>
       
       
     </footer>
@@ -376,7 +432,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/09/16/CrashSymbolicateSystemDesign/" data-id="ck8t00noe0003lrjh5yq2g64g" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/09/16/CrashSymbolicateSystemDesign/" data-id="ckfw44fw00006vscfabxrbxvv" class="article-share-link">Share</a>
       
       
     </footer>
@@ -448,7 +504,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/06/13/libmalloc/" data-id="ck8t00np60015lrjh467tbr96" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/06/13/libmalloc/" data-id="ckfw44fwo0014vscf8ysgc19w" class="article-share-link">Share</a>
       
       
     </footer>
@@ -552,7 +608,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/04/13/dependency/" data-id="ck8t00now000llrjh7dc0hy2r" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/04/13/dependency/" data-id="ckfw44fwi000rvscfc62ccgg2" class="article-share-link">Share</a>
       
       
     </footer>
@@ -646,7 +702,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/04/10/iosoom/" data-id="ck8t00np4000zlrjh7jm327g9" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/04/10/iosoom/" data-id="ckfw44fwm0010vscf45t6e09u" class="article-share-link">Share</a>
       
       
     </footer>
@@ -707,7 +763,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/01/15/sharedlibraryandpic/" data-id="ck8t00np9001blrjhc3tkdvju" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/01/15/sharedlibraryandpic/" data-id="ckfw44fwr001dvscfcf8wauu6" class="article-share-link">Share</a>
       
       
     </footer>
@@ -793,99 +849,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2017/12/24/In-depthUnderStandingOfThreadSafety/" data-id="ck8t00noj0007lrjh81nt6my9" class="article-share-link">Share</a>
-      
-      
-    </footer>
-  </div>
-  
-</article>
-
-
-  
-    <article id="post-safeSwizzleRSSwizzleAnalyze" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/12/04/safeSwizzleRSSwizzleAnalyze/" class="article-date">
-  <time datetime="2017-12-04T06:08:16.000Z" itemprop="datePublished">2017-12-04</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/Hook/">Hook</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/12/04/safeSwizzleRSSwizzleAnalyze/">Method Swizzling 的正确途径</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>iOS 平台开发，有时会使用到Method Swizzling,  但Method Swizzling 在使用过程中有许多需要注意的问题，本文将介绍将会产生的问题，并且分析 <a href="https://github.com/rabovik/RSSwizzle" target="_blank" rel="noopener">RSSwizzle</a> 是如何解决这些问题的。</p>
-<h2 id="在Objective-C-中方法交换有什么危险"><a href="#在Objective-C-中方法交换有什么危险" class="headerlink" title="在Objective-C 中方法交换有什么危险"></a>在Objective-C 中方法交换有什么危险</h2><p><a href="https://stackoverflow.com/questions/5339276/what-are-the-dangers-of-method-swizzling-in-objective-c?answertab=active#tab-top" target="_blank" rel="noopener">What are the Dangers of Method Swizzling in Objective C?</a><br>stackoverflow 上的这个回答十分精彩。</p>
-<pre><code>- Method swizzling 并不是原子操作
-- 改变了不是我们自己代码的行为
-- 有可能出现命名冲突
-- Swizzling 改变方法的参数
-- Swizzles 顺序问题
-- 难于理解
-- 难于Debug</code></pre><h3 id="Swizzling-改变方法的参数-例子"><a href="#Swizzling-改变方法的参数-例子" class="headerlink" title="Swizzling 改变方法的参数 例子"></a>Swizzling 改变方法的参数 例子</h3><p>使用<code>method_exchangeImplementations</code>更改方法的实现，会导致一个问题，origin_imp 如果使用了 _cmd 参数，hook之后的_cmd 是不符合预期的。</p>
-<p>hook <code>touchesBegan</code> 过的同学应该遇到这种问题。</p>
-<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">- (<span class="keyword">void</span>)touchesBegan:(<span class="built_in">NSSet</span>&lt;<span class="built_in">UITouch</span> *&gt; *)touches withEvent:(<span class="built_in">UIEvent</span> *)event;</span><br></pre></td></tr></table></figure>
-
-<p>这个函数里面 调用了 <code>forwardTouchMethod</code> , 反汇编后类似这种。</p>
-<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">- (<span class="keyword">void</span>)touchesBegan:(<span class="built_in">NSSet</span> *)touches withEvent:(<span class="built_in">UIEvent</span> *)event &#123;</span><br><span class="line">    forwardTouchMethod(<span class="keyword">self</span>, _cmd, touches, event);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> forwardTouchMethod(<span class="keyword">id</span> <span class="keyword">self</span>, SEL _cmd, <span class="built_in">NSSet</span> *touches, <span class="built_in">UIEvent</span> *event) &#123;</span><br><span class="line">  <span class="comment">// The responder chain is used to figure out where to send the next touch</span></span><br><span class="line">    <span class="built_in">UIResponder</span> *nextResponder = [<span class="keyword">self</span> nextResponder];</span><br><span class="line">    <span class="keyword">if</span> (nextResponder &amp;&amp; nextResponder != <span class="keyword">self</span>) &#123;</span><br><span class="line"></span><br><span class="line">      <span class="comment">// Not all touches are forwarded - so we filter here.</span></span><br><span class="line">        <span class="built_in">NSMutableSet</span> *filteredTouches = [<span class="built_in">NSMutableSet</span> set];</span><br><span class="line">        [touches enumerateObjectsUsingBlock:^(<span class="built_in">UITouch</span> *touch, <span class="built_in">BOOL</span> *stop) &#123;</span><br><span class="line"></span><br><span class="line">          <span class="comment">// Checks every touch for forwarding requirements.</span></span><br><span class="line">            <span class="keyword">if</span> ([touch _wantsForwardingFromResponder:<span class="keyword">self</span> toNextResponder:nextResponder withEvent:event]) &#123;</span><br><span class="line">                [filteredTouches addObject:touch];</span><br><span class="line">            &#125;<span class="keyword">else</span> &#123;</span><br><span class="line">              <span class="comment">// This is interesting legacy behavior. Before iOS 5, all touches are forwarded (and this is logged)</span></span><br><span class="line">                <span class="keyword">if</span> (!_UIApplicationLinkedOnOrAfter(<span class="number">12</span>)) &#123;</span><br><span class="line">                    [filteredTouches addObject:touch];</span><br><span class="line"></span><br><span class="line">                    <span class="comment">// Log old behavior</span></span><br><span class="line">                    <span class="keyword">static</span> <span class="built_in">BOOL</span> didLog = <span class="number">0</span>;</span><br><span class="line">                    <span class="keyword">if</span> (!didLog) &#123;</span><br><span class="line">                        <span class="built_in">NSLog</span>(<span class="string">@"Pre-iOS 5.0 touch delivery method forwarding relied upon. Forwarding -%@ to %@."</span>, <span class="built_in">NSStringFromSelector</span>(_cmd), nextResponder);</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;];</span><br><span class="line"></span><br><span class="line">        <span class="comment">// here we basically call [nextResponder touchesBegan:filteredTouches event:event];</span></span><br><span class="line">        [nextResponder performSelector:_cmd withObject:filteredTouches withObject:event];</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>如果我们exchange了 imp, <code>[nextResponder performSelector:_cmd withObject:filteredTouches withObject:event];</code> 是没有相应的实现的，<strong>_cmd</strong> 就变成了 我们替换的 sel. 显然，nextResponder没有实现相应的方法，就会crash。</p>
-<h4 id="正确的hook方式"><a href="#正确的hook方式" class="headerlink" title="正确的hook方式"></a><strong>正确的hook方式</strong></h4><p><strong>方案一:</strong><br>直接替换 method 的 IMP.<br><code>method_setImplementation</code>, 在新的IMP中调用原始的 IMP.</p>
-<h2 id="RSSwizzle"><a href="#RSSwizzle" class="headerlink" title="RSSwizzle"></a>RSSwizzle</h2><p><strong>RSSwizzle 实现方式</strong><br>    1. 根据block生成NEW IMP<br>    2. replace 目标方法的实现<br>    3. block可以获取原来的IMP</p>
-<p><strong>核心交换代码</strong></p>
-<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> swizzle(Class classToSwizzle,</span><br><span class="line">                    SEL selector,</span><br><span class="line">                    RSSwizzleImpFactoryBlock factoryBlock)</span><br><span class="line">&#123;</span><br><span class="line">    Method method = class_getInstanceMethod(classToSwizzle, selector);</span><br><span class="line">    </span><br><span class="line">    <span class="built_in">NSCAssert</span>(<span class="literal">NULL</span> != method,</span><br><span class="line">              <span class="string">@"Selector %@ not found in %@ methods of class %@."</span>,</span><br><span class="line">              <span class="built_in">NSStringFromSelector</span>(selector),</span><br><span class="line">              class_isMetaClass(classToSwizzle) ? <span class="string">@"class"</span> : <span class="string">@"instance"</span>,</span><br><span class="line">              classToSwizzle);</span><br><span class="line">    </span><br><span class="line">    <span class="built_in">NSCAssert</span>(blockIsAnImpFactoryBlock(factoryBlock),</span><br><span class="line">             <span class="string">@"Wrong type of implementation factory block."</span>);</span><br><span class="line">    </span><br><span class="line">    __block OSSpinLock lock = OS_SPINLOCK_INIT;</span><br><span class="line">    <span class="comment">// To keep things thread-safe, we fill in the originalIMP later,</span></span><br><span class="line">    <span class="comment">// with the result of the class_replaceMethod call below.</span></span><br><span class="line">    __block IMP originalIMP = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// This block will be called by the client to get original implementation and call it.</span></span><br><span class="line">    RSSWizzleImpProvider originalImpProvider = ^IMP&#123;</span><br><span class="line">        <span class="comment">// It's possible that another thread can call the method between the call to</span></span><br><span class="line">        <span class="comment">// class_replaceMethod and its return value being set.</span></span><br><span class="line">        <span class="comment">// So to be sure originalIMP has the right value, we need a lock.</span></span><br><span class="line">        OSSpinLockLock(&amp;lock);</span><br><span class="line">        IMP imp = originalIMP;</span><br><span class="line">        OSSpinLockUnlock(&amp;lock);</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">if</span> (<span class="literal">NULL</span> == imp)&#123;</span><br><span class="line">            <span class="comment">// If the class does not implement the method</span></span><br><span class="line">            <span class="comment">// we need to find an implementation in one of the superclasses.</span></span><br><span class="line">            Class superclass = class_getSuperclass(classToSwizzle);</span><br><span class="line">            imp = method_getImplementation(class_getInstanceMethod(superclass,selector));</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> imp;</span><br><span class="line">    &#125;;</span><br><span class="line">    </span><br><span class="line">    RSSwizzleInfo *swizzleInfo = [RSSwizzleInfo new];</span><br><span class="line">    swizzleInfo.selector = selector;</span><br><span class="line">    swizzleInfo.impProviderBlock = originalImpProvider;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// We ask the client for the new implementation block.</span></span><br><span class="line">    <span class="comment">// We pass swizzleInfo as an argument to factory block, so the client can</span></span><br><span class="line">    <span class="comment">// call original implementation from the new implementation.</span></span><br><span class="line">    <span class="keyword">id</span> newIMPBlock = factoryBlock(swizzleInfo);</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">char</span> *methodType = method_getTypeEncoding(method);</span><br><span class="line">    </span><br><span class="line">    <span class="built_in">NSCAssert</span>(blockIsCompatibleWithMethodType(newIMPBlock,methodType),</span><br><span class="line">             <span class="string">@"Block returned from factory is not compatible with method type."</span>);</span><br><span class="line">    </span><br><span class="line">    IMP newIMP = imp_implementationWithBlock(newIMPBlock);</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// Atomically replace the original method with our new implementation.</span></span><br><span class="line">    <span class="comment">// This will ensure that if someone else's code on another thread is messing</span></span><br><span class="line">    <span class="comment">// with the class' method list too, we always have a valid method at all times.</span></span><br><span class="line">    <span class="comment">//</span></span><br><span class="line">    <span class="comment">// If the class does not implement the method itself then</span></span><br><span class="line">    <span class="comment">// class_replaceMethod returns NULL and superclasses's implementation will be used.</span></span><br><span class="line">    <span class="comment">//</span></span><br><span class="line">    <span class="comment">// We need a lock to be sure that originalIMP has the right value in the</span></span><br><span class="line">    <span class="comment">// originalImpProvider block above.</span></span><br><span class="line">    OSSpinLockLock(&amp;lock);</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// originIMP get value from here</span></span><br><span class="line">    originalIMP = class_replaceMethod(classToSwizzle, selector, newIMP, methodType);</span><br><span class="line">    OSSpinLockUnlock(&amp;lock);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p><strong>具体过程解析</strong></p>
-<p><strong>如果hook的方法在hook的类中有实现</strong><br>    1. block生成新的IMP<br>    2. 替换IMP, 这时候拿到原始的ORIGINIMP<br>    3. block接受了一个RSSwizzleInfo参数，从参数中可以拿到当时保存的获得IMP的block<br>    4. 由于block中存储的是originIMP ，所以获得的是原始的实现</p>
-<p><strong>如果hook的方法在子类中无实现</strong><br>    1. block生成新的IMP<br>    2. 替换IMP（由于没有实现，相当于add了IMP）, 原始的实现为nil<br>    3. block 中我们调用calloriginIMP,这个方法实际调用了一个block originalImpProvider<br>    4. 这个block的从父类找到相应的实现（注意，这里实际上是在 调用方法 时才会触发）</p>
-<p>这种情况是调用时，动态获得 当时的方法实现，所以可以避免hook顺序带来的问题。</p>
-<h3 id="那么影响Swizzle的结果到底是是什么呢？"><a href="#那么影响Swizzle的结果到底是是什么呢？" class="headerlink" title="那么影响Swizzle的结果到底是是什么呢？"></a>那么影响Swizzle的结果到底是是什么呢？</h3><p>Swizzle实现方式本质上就是改变方法的IMP 为 NewIMP, 并调用原先的originIMP</p>
-<p>只hook一个是没问题，但是涉及到多次hook, 并且hook的方法可能为一个时， 他们的顺序就会导致不同的结果，因为顺序不同，Swizzle时，Method 相应的 IMP 不相同。<br>这里我们更关注，父子类+hook 同一个方法产生的问题。</p>
-<p><strong>那么RSSwizzle  怎么解决问题的呢？</strong></p>
-<p>父类有method, 子类没有实现method.<br>我们有如下的IMP:<code>superIMP</code>,<code>superNewIMP</code>,<code>subNewIMp</code><br>此时，我们Swizzle 父类的method 为 superNewIMP<br>Swizzle子类的method 为 subNewIMp</p>
-<p><strong>首先关注我们期望的调用顺序</strong><br>    1. subNewIMP<br>    2. superNewIMP<br>    3. superIMP</p>
-<p><strong>我们先hook父类，再hook子类后，的调用顺序</strong><br>    1. subNewImp<br>    2. superNewIMP<br>    3. superIMp</p>
-<p><strong>先hook子类再hook父类</strong><br>    1. subNewIMP<br>    2. superIMP</p>
-<p><strong>为什么会有差异?</strong><br>因为当我们在hook子类方法时，原先的方法实现是不同的。</p>
-<p><strong>解决问题</strong><br>那就要保证，即使hook的顺序不同，也能正确取到相应的IMP<br>那我们保证，子类在调用相应方法的时候，取到的IMP是父类当前的IMP就可以(这样就和Swizzle的时间顺序没有了关系)</p>
-<h2 id="RSSwizzle-加锁，保证线程安全"><a href="#RSSwizzle-加锁，保证线程安全" class="headerlink" title="RSSwizzle 加锁，保证线程安全"></a>RSSwizzle 加锁，保证线程安全</h2><p><strong><code>originalImpProvider</code> 的代码</strong></p>
-<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">RSSWizzleImpProvider originalImpProvider = ^IMP&#123;</span><br><span class="line">    OSSpinLockLock(&amp;lock);</span><br><span class="line">    IMP imp = originalIMP;</span><br><span class="line">    OSSpinLockUnlock(&amp;lock);</span><br><span class="line">    <span class="keyword">if</span> (<span class="literal">NULL</span> == imp)&#123;</span><br><span class="line">        Class superclass = class_getSuperclass(classToSwizzle);</span><br><span class="line">        imp = method_getImplementation(class_getInstanceMethod(superclass,selector));</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> imp;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p><strong>Swizzle 方法的某个部分</strong></p>
-<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">OSSpinLockLock(&amp;lock);</span><br><span class="line">originalIMP = class_replaceMethod(classToSwizzle, selector, newIMP, methodType);</span><br><span class="line">OSSpinLockUnlock(&amp;lock);</span><br></pre></td></tr></table></figure>
-
-<p>这两个方法有个共享变量 originalIMP，这就意味着，可能会出现线程安全问题。再仔细看下代码</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">OSSpinLockLock(&amp;lock);</span><br><span class="line">IMP imp = originalIMP;</span><br><span class="line">OSSpinLockUnlock(&amp;lock);</span><br><span class="line">if (NULL == imp)&#123;</span><br></pre></td></tr></table></figure>
-<p>这个共享变量，和条件判断相关。敏锐的同学一眼就能看出来，在不加锁的情况下，当不同的线程对 这两段代码进行执行的时候，就会出现，即使<code>if (NULL == imp){</code>通过了，但实际上，另一条线程执行了<code>class_replaceMethod()</code>。这时就会出现问题。</p>
-<p>在加锁之后，在同一时间段内，只有一个线程能访问改变这个变量的代码。避免了共享变量导致的线程安全问题。</p>
-<h2 id="采用Block添加实现，没有命名冲突问题"><a href="#采用Block添加实现，没有命名冲突问题" class="headerlink" title="采用Block添加实现，没有命名冲突问题"></a>采用Block添加实现，没有命名冲突问题</h2><p>连命名的机会都没有…</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">RSSwizzleInstanceMethod(classToSwizzle,</span><br><span class="line">                        @selector(calculate:),</span><br><span class="line">                        RSSWReturnType(int),</span><br><span class="line">                        RSSWArguments(int number),</span><br><span class="line">                        RSSWReplacement(</span><br><span class="line">&#123;</span><br><span class="line">    // The following code will be used as the new implementation.</span><br><span class="line"></span><br><span class="line">    // Calling original implementation.</span><br><span class="line">    int res = RSSWCallOriginal(number);</span><br><span class="line">    // Returning modified return value.</span><br><span class="line">    return res + 1;</span><br><span class="line">&#125;), 0, NULL);</span><br></pre></td></tr></table></figure>
-
-<h2 id="采用block-添加实现，只是改变了原来的IMP-，Selector没有改变，实现的-cmd并没有改变"><a href="#采用block-添加实现，只是改变了原来的IMP-，Selector没有改变，实现的-cmd并没有改变" class="headerlink" title="采用block 添加实现，只是改变了原来的IMP ，Selector没有改变，实现的_cmd并没有改变"></a>采用block 添加实现，只是改变了原来的IMP ，Selector没有改变，实现的<code>_cmd</code>并没有改变</h2><p>参数<code>_cmd</code>是当前方法的selector</p>
-<p>swizzle method 可能会导致的<code>_cmd</code> 参数改变，例如<br>我们有<code>originMethod</code>和<code>newMethod</code>,他们分别对应着 <code>OriginIMP</code>,和<code>NewIMP</code>.<br>当我们交换方法实现后:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">originmethod -&gt; NewIMP</span><br><span class="line">newMethod -&gt; OriginIMP</span><br></pre></td></tr></table></figure>
-<p>要想调用原来的实现，我们需要调用 <code>newMethod</code> 这就导致了 相同的IMP 但是<code>_cmd</code> 却改变了 </p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://yoursite.com/2017/12/04/safeSwizzleRSSwizzleAnalyze/" data-id="ck8t00np80019lrjh1hh6gbov" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2017/12/24/In-depthUnderStandingOfThreadSafety/" data-id="ckfw44fw3000avscf383netl5" class="article-share-link">Share</a>
       
       
     </footer>
@@ -925,7 +889,7 @@
   <div class="widget-wrap">
     <h3 class="widget-title">Archives</h3>
     <div class="widget">
-      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/04/">April 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/03/">March 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/02/">February 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/11/">November 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/10/">October 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/09/">September 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/09/">September 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/06/">June 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/04/">April 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/01/">January 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/12/">December 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/10/">October 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/09/">September 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/05/">May 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/04/">April 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">February 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/01/">January 2017</a></li></ul>
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/10/">October 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/04/">April 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/03/">March 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/02/">February 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/11/">November 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/10/">October 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/09/">September 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/09/">September 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/06/">June 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/04/">April 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/01/">January 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/12/">December 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/10/">October 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/09/">September 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/05/">May 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/04/">April 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">February 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/01/">January 2017</a></li></ul>
     </div>
   </div>
 
@@ -936,6 +900,10 @@
     <h3 class="widget-title">Recent Posts</h3>
     <div class="widget">
       <ul>
+        
+          <li>
+            <a href="/2020/10/05/cpythonstrip/">cpython3.8瘦身到0.95mb</a>
+          </li>
         
           <li>
             <a href="/2020/04/10/objcblockimp/">imp_implementationWithBlock 的内部实现 trampoline</a>
@@ -951,10 +919,6 @@
         
           <li>
             <a href="/2020/03/25/DobbyRead/">Dobby源码学习（一） Inline Hook</a>
-          </li>
-        
-          <li>
-            <a href="/2020/03/19/cocoapods-new-feature/">cocoapods 新feature 开发 Example, On Demand Resource</a>
           </li>
         
       </ul>

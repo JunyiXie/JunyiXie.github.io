@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+
+  
+  <title>MachO（一） ObjC类结构的加载 | xiejunyi Blog</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="最近做的事情跟MachO中的ObjC内容十分相关。OC Runtime 通过加载MachO中的文件信息，将类的信息添加到运行时，理论上，我们也可以自己去 加载指定位置的类信息注册加载到Runtime中。 首先看看OBJC类结构在MachO中有哪些内容。本文通过MachoView, Hopper 进行分析。 12345678__TEXT, __objc_classname 类名列表__TEXT,__">
+<meta property="og:type" content="article">
+<meta property="og:title" content="MachO（一） ObjC类结构的加载">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;04&#x2F;01&#x2F;MachOObjC&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="最近做的事情跟MachO中的ObjC内容十分相关。OC Runtime 通过加载MachO中的文件信息，将类的信息添加到运行时，理论上，我们也可以自己去 加载指定位置的类信息注册加载到Runtime中。 首先看看OBJC类结构在MachO中有哪些内容。本文通过MachoView, Hopper 进行分析。 12345678__TEXT, __objc_classname 类名列表__TEXT,__">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2020-04-08T13:51:46.218Z">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="xiejunyi Blog" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">xiejunyi Blog</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-MachOObjC" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/04/01/MachOObjC/" class="article-date">
+  <time datetime="2020-04-01T13:11:42.000Z" itemprop="datePublished">2020-04-01</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      MachO（一） ObjC类结构的加载
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>最近做的事情跟MachO中的ObjC内容十分相关。OC Runtime 通过加载MachO中的文件信息，将类的信息添加到运行时，理论上，我们也可以自己去 加载指定位置的类信息注册加载到Runtime中。</p>
+<p>首先看看OBJC类结构在MachO中有哪些内容。本文通过MachoView, Hopper 进行分析。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">__TEXT, __objc_classname 类名列表</span><br><span class="line">__TEXT,__objc_methodname 方法名列表</span><br><span class="line">__TEXT,__objc_methtype 方法类型列表</span><br><span class="line">__DATA, __objc_classlist 记录镜像所定义的类，每个条目都是一个指针，指向到 __objc_data section</span><br><span class="line">__DATA,objc_imageinfo 记录 Objective-C 环境信息等，dyld 用它来判断镜像是否是 objc 镜像</span><br><span class="line">__DATA,__objc_const 存放类的元数据，包括：method list、variable list、property list、class info</span><br><span class="line">__DATA,__objc_data 存放真正的类数据，和 __objc_classlist 条目呼应</span><br><span class="line">__DATA,__objc_classrefs 类引用列表</span><br></pre></td></tr></table></figure>
+
+<p>我关注的主要内容是 ObjC 类如何被加载注册的。<br>首先分析一下 大致的数据结构。</p>
+<p><code>__objc_classlist</code>其内容指向所定义类的地址，那就看看class定义的结构大致是什么样子的，通过MachOview查看 <code>__objc_classlist</code>的一个条目<code>0x0000000000008100</code> hopper 看一下，位于<code>__objc_data</code>。<br>hopper 中的 <code>objc_class</code> 这个结构在objc_runtime中是有的，之后分析runtime源码会用到。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">objc_class</span> :</span> objc_object &#123;</span><br><span class="line">    <span class="comment">// Class ISA;</span></span><br><span class="line">    Class superclass;</span><br><span class="line">    <span class="keyword">cache_t</span> cache;             <span class="comment">// formerly cache pointer and vtable</span></span><br><span class="line">    <span class="keyword">class_data_bits_t</span> bits;    <span class="comment">// 先是ro,后被设置为rw</span></span><br><span class="line">    <span class="keyword">class_rw_t</span>* data() &#123;</span><br><span class="line">        <span class="keyword">return</span> (<span class="keyword">class_rw_t</span> *)(bits &amp; FAST_DATA_MASK);</span><br><span class="line">    &#125;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">objc_object</span> &#123;</span></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="keyword">isa_t</span> isa;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">class_ro_t</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint32_t</span> flags;</span><br><span class="line">    <span class="keyword">uint32_t</span> instanceStart;</span><br><span class="line">    <span class="keyword">uint32_t</span> instanceSize;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> __LP64__</span></span><br><span class="line">    <span class="keyword">uint32_t</span> reserved;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">uint8_t</span> * ivarLayout;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">char</span> * name;</span><br><span class="line">    <span class="keyword">method_list_t</span> * baseMethodList;</span><br><span class="line">    <span class="keyword">protocol_list_t</span> * baseProtocols;</span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">ivar_list_t</span> * ivars;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">uint8_t</span> * weakIvarLayout;</span><br><span class="line">    <span class="keyword">property_list_t</span> *baseProperties;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line">_OBJC_CLASS_$_ExampleObject:</span><br><span class="line">0000000000008100         struct __objc_class &#123;                                  ; DATA XREF=0x8018</span><br><span class="line">                             _OBJC_METACLASS_$_ExampleObject,     // metaclass 元类</span><br><span class="line">                             _OBJC_CLASS_$_NSObject,              // superclass 父类</span><br><span class="line">                             __objc_empty_cache,                  // cache 先不管</span><br><span class="line">                             0x0,                                 // vtable 先不管</span><br><span class="line">                             __objc_class_ExampleObject_data      // data objc_const段内</span><br><span class="line">                         &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">元类</span><br><span class="line">_OBJC_METACLASS_$_ExampleObject:</span><br><span class="line">00000000000080d8         struct __objc_class &#123;                                  ; DATA XREF=_OBJC_CLASS_$_ExampleObject</span><br><span class="line">                             _OBJC_METACLASS_$_NSObject,          // metaclass</span><br><span class="line">                             _OBJC_METACLASS_$_NSObject,          // superclass</span><br><span class="line">                             __objc_empty_cache,                  // cache</span><br><span class="line">                             0x0,                                 // vtable</span><br><span class="line">                             __objc_metaclass_ExampleObject_data  // data</span><br><span class="line">                         &#125;</span><br><span class="line"></span><br><span class="line">看这个注释，是 class_ro_t</span><br><span class="line">__objc_class_ExampleObject_data:</span><br><span class="line">0000000000008090         struct __objc_data &#123;                                   ; &quot;ExampleObject&quot;, DATA XREF=_OBJC_CLASS_$_ExampleObject</span><br><span class="line">                             0x80,                                // flags</span><br><span class="line">                             8,                                   // instance start</span><br><span class="line">                             8,                                   // instance size</span><br><span class="line">                             0x0,</span><br><span class="line">                             0x0,                                 // ivar layout</span><br><span class="line">                             0x7f5d,                              // name</span><br><span class="line">                             __objc_class_ExampleObject_methods,  // base methods</span><br><span class="line">                             0x0,                                 // base protocols</span><br><span class="line">                             0x0,                                 // ivars</span><br><span class="line">                             0x0,                                 // weak ivar layout</span><br><span class="line">                             0x0                                  // base properties</span><br><span class="line">                         &#125;</span><br></pre></td></tr></table></figure>
+
+<p>结合源码查看一下 加载的过程。从别人的博客中看到 入口是 _objc_init。<br>加载通过 注册dyld回调的方式。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">_dyld_objc_notify_register(&amp;map_images, load_images, unmap_image);//map_images加载镜像</span><br></pre></td></tr></table></figure>
+
+<p>通过阅读一些大佬 <a href="https://zhangbuhuai.com/post/runtime.html" target="_blank" rel="noopener">https://zhangbuhuai.com/post/runtime.html</a> 的博客，大致了解了OBJC加载的步骤，根据我最编译的简单的Dylib，大致过滤了一下需要关注的内容。</p>
+<ol>
+<li>discover classes. 即从镜像提取类信息，并存到名为allocatedClasses的全局 hash table 中 // <strong>提取信息，不看了</strong></li>
+<li>remap classes. 重新调整类之间的引用 // <strong>没执行到不管了</strong></li>
+<li>fix up selector references. 提取方法，并注册到名为namedSelectors的全局 map table 中</li>
+<li>fix up objc_msgSend_fixup // <strong>没有这个内容，不管了</strong></li>
+<li>discover protocols. 提取 protocols，存储到全局 map table // <strong>先不考虑</strong></li>
+<li>fix up @protocol references. 和类一样，protocol 也有继承关系，此过程 fixup 它们的依赖关系 // <strong>先不考虑</strong></li>
+<li>realize non-lazy classes. realize 含有+load方法或者静态实例的类 </li>
+<li>realize future classes. realize 含有RO_FUTURE标识的类，这些类一般是 Core Foundation 中的类</li>
+<li>discover categories. 提取 categories，存储到全局 map table</li>
+</ol>
+<p>Runtime 提供 <code>void objc_registerClassPair(Class cls);</code> 方法去注册类。</p>
+<p>Class 类型就是 <code>typedef struct objc_class *Class;</code>, 看起来我们需要从MachO中读取数据，随后修正objc_class结构就能做到了。具体如何修正那就参考runtime自己的实现。</p>
+<p>… </p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2020/04/01/MachOObjC/" data-id="cka5hgsgp000bnn2a4zab068h" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+    <a href="/2020/04/08/lliread/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          lli源码阅读
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2020/03/25/DobbyRead/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">Dobby源码学习（一） Inline Hook</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Categories</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/APM/">APM</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/Hook/">Hook</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/iOS/">iOS</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/">源码分析</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E7%A0%94%E5%8F%91%E6%B5%81%E7%A8%8B/">研发流程</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%AE%BE%E8%AE%A1%E6%9E%B6%E6%9E%84/">设计架构</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/04/">April 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/03/">March 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/02/">February 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/11/">November 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/10/">October 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/09/">September 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/09/">September 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/06/">June 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/04/">April 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/01/">January 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/12/">December 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/10/">October 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/09/">September 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/05/">May 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/04/">April 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">February 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/01/">January 2017</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/04/10/objcblockimp/">imp_implementationWithBlock 的内部实现 trampoline</a>
+          </li>
+        
+          <li>
+            <a href="/2020/04/08/lliread/">lli源码阅读</a>
+          </li>
+        
+          <li>
+            <a href="/2020/04/01/MachOObjC/">MachO（一） ObjC类结构的加载</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/25/DobbyRead/">Dobby源码学习（一） Inline Hook</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/19/cocoapods-new-feature/">cocoapods 新feature 开发 Example, On Demand Resource</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2020 junyixie<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+
+
+  </div>
+</body>
+</html>
