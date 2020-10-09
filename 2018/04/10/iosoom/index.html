@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="en">
+    <!-- title -->
+
+
+
+
+<!-- keywords -->
+
+
+
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" >
+    <meta name="author" content="junyixie">
+    <meta name="renderer" content="webkit">
+    <meta name="copyright" content="junyixie">
+    
+    <meta name="keywords" content="hexo,hexo-theme,hexo-blog,blog,谢俊逸">
+    
+    <meta name="description" content="">
+    <meta name="description" content="最近在做oom,简单的总结下相关知识 Out Of Memory 是 Jetsam同过响应压力通知杀掉优先级内消耗内存太多的进程, 导致应用闪退的一种现象，难于捕获和分析。 技术点：1. iOS 内存分配系统的实现 2. 如何抓到回调与如何监控 3. 数据结构设计 4. iOS abort机制 5. OOM事件捕获iOS内存分配系统的实现（用户层级）iOS中，内存堆分配的基本控制者是 malloc">
+<meta property="og:type" content="article">
+<meta property="og:title" content="iOS OOM">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2018&#x2F;04&#x2F;10&#x2F;iosoom&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="最近在做oom,简单的总结下相关知识 Out Of Memory 是 Jetsam同过响应压力通知杀掉优先级内消耗内存太多的进程, 导致应用闪退的一种现象，难于捕获和分析。 技术点：1. iOS 内存分配系统的实现 2. 如何抓到回调与如何监控 3. 数据结构设计 4. iOS abort机制 5. OOM事件捕获iOS内存分配系统的实现（用户层级）iOS中，内存堆分配的基本控制者是 malloc">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2019-11-26T15:31:18.858Z">
+<meta name="twitter:card" content="summary">
+    <meta http-equiv="Cache-control" content="no-cache">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    
+    <title>iOS OOM · xiejunyi,谢俊逸</title>
+    <style type="text/css">
+    @font-face {
+        font-family: 'Oswald-Regular';
+        src: url("/font/Oswald-Regular.ttf");
+    }
+
+    body {
+        margin: 0;
+    }
+
+    header,
+    footer,
+    .back-top,
+    .sidebar,
+    .container,
+    .site-intro-meta,
+    .toc-wrapper {
+        display: none;
+    }
+
+    .site-intro {
+        position: relative;
+        z-index: 3;
+        width: 100%;
+        /* height: 50vh; */
+        overflow: hidden;
+    }
+
+    .site-intro-placeholder {
+        position: absolute;
+        z-index: -2;
+        top: 0;
+        left: 0;
+        width: calc(100% + 300px);
+        height: 100%;
+        background: repeating-linear-gradient(-45deg, #444 0, #444 80px, #333 80px, #333 160px);
+        background-position: center center;
+        transform: translate3d(-226px, 0, 0);
+        animation: gradient-move 2.5s ease-out 0s infinite;
+    }
+
+    @keyframes gradient-move {
+        0% {
+            transform: translate3d(-226px, 0, 0);
+        }
+        100% {
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+</style>
+
+    <link rel="preload" href= "/css/style.css?v=20180824" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    <link rel="stylesheet" href= "/css/mobile.css?v=20180824" media="(max-width: 980px)">
+    
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    
+    <!-- /*! loadCSS. [c]2017 Filament Group, Inc. MIT License */
+/* This file is meant as a standalone workflow for
+- testing support for link[rel=preload]
+- enabling async CSS loading in browsers that do not support rel=preload
+- applying rel preload css once loaded, whether supported or not.
+*/ -->
+<script>
+(function( w ){
+	"use strict";
+	// rel=preload support test
+	if( !w.loadCSS ){
+		w.loadCSS = function(){};
+	}
+	// define on the loadCSS obj
+	var rp = loadCSS.relpreload = {};
+	// rel=preload feature support test
+	// runs once and returns a function for compat purposes
+	rp.support = (function(){
+		var ret;
+		try {
+			ret = w.document.createElement( "link" ).relList.supports( "preload" );
+		} catch (e) {
+			ret = false;
+		}
+		return function(){
+			return ret;
+		};
+	})();
+
+	// if preload isn't supported, get an asynchronous load by using a non-matching media attribute
+	// then change that media back to its intended value on load
+	rp.bindMediaToggle = function( link ){
+		// remember existing media attr for ultimate state, or default to 'all'
+		var finalMedia = link.media || "all";
+
+		function enableStylesheet(){
+			link.media = finalMedia;
+		}
+
+		// bind load handlers to enable media
+		if( link.addEventListener ){
+			link.addEventListener( "load", enableStylesheet );
+		} else if( link.attachEvent ){
+			link.attachEvent( "onload", enableStylesheet );
+		}
+
+		// Set rel and non-applicable media type to start an async request
+		// note: timeout allows this to happen async to let rendering continue in IE
+		setTimeout(function(){
+			link.rel = "stylesheet";
+			link.media = "only x";
+		});
+		// also enable media after 3 seconds,
+		// which will catch very old browsers (android 2.x, old firefox) that don't support onload on link
+		setTimeout( enableStylesheet, 3000 );
+	};
+
+	// loop through link elements in DOM
+	rp.poly = function(){
+		// double check this to prevent external calls from running
+		if( rp.support() ){
+			return;
+		}
+		var links = w.document.getElementsByTagName( "link" );
+		for( var i = 0; i < links.length; i++ ){
+			var link = links[ i ];
+			// qualify links to those with rel=preload and as=style attrs
+			if( link.rel === "preload" && link.getAttribute( "as" ) === "style" && !link.getAttribute( "data-loadcss" ) ){
+				// prevent rerunning on link
+				link.setAttribute( "data-loadcss", true );
+				// bind listeners to toggle media back
+				rp.bindMediaToggle( link );
+			}
+		}
+	};
+
+	// if unsupported, run the polyfill
+	if( !rp.support() ){
+		// run once at least
+		rp.poly();
+
+		// rerun poly on an interval until onload
+		var run = w.setInterval( rp.poly, 500 );
+		if( w.addEventListener ){
+			w.addEventListener( "load", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		} else if( w.attachEvent ){
+			w.attachEvent( "onload", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		}
+	}
+
+
+	// commonjs
+	if( typeof exports !== "undefined" ){
+		exports.loadCSS = loadCSS;
+	}
+	else {
+		w.loadCSS = loadCSS;
+	}
+}( typeof global !== "undefined" ? global : this ) );
+</script>
+
+    <link rel="icon" href= "/assets/favicon.ico" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js" as="script" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js" as="script" />
+    <link rel="preload" href="/scripts/main.js" as="script" />
+    <link rel="preload" as="font" href="/font/Oswald-Regular.ttf" crossorigin>
+    <link rel="preload" as="font" href="https://at.alicdn.com/t/font_327081_1dta1rlogw17zaor.woff" crossorigin>
+    
+    <!-- fancybox -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.js" defer></script>
+    <!-- 百度统计  -->
+    
+    <!-- 谷歌统计  -->
+    
+</head>
+
+    
+        <body class="post-body">
+    
+    
+<header class="header">
+
+    <div class="read-progress"></div>
+    <div class="header-sidebar-menu">&#xe775;</div>
+    <!-- post页的toggle banner  -->
+    
+    <div class="banner">
+            <div class="blog-title">
+                <a href="/" >xiejunyi&#39;s blog.</a>
+            </div>
+            <div class="post-title">
+                <a href="#" class="post-name">iOS OOM</a>
+            </div>
+    </div>
+    
+    <a class="home-link" href=/>xiejunyi's blog.</a>
+</header>
+    <div class="wrapper">
+        <div class="site-intro" style="
+
+
+
+
+
+
+
+height:50vh;
+">
+    
+    <!-- 主页  -->
+    
+    
+    <!-- 404页  -->
+            
+    <div class="site-intro-placeholder"></div>
+    <div class="site-intro-img" style="background-image: url(/intro/post-bg.jpg)"></div>
+    <div class="site-intro-meta">
+        <!-- 标题  -->
+        <h1 class="intro-title">
+            <!-- 主页  -->
+            
+            iOS OOM
+            <!-- 404 -->
+            
+        </h1>
+        <!-- 副标题 -->
+        <p class="intro-subtitle">
+            <!-- 主页副标题  -->
+            
+            
+            <!-- 404 -->
+            
+        </p>
+        <!-- 文章页meta -->
+        
+            <div class="post-intros">
+                <!-- 文章页标签  -->
+                
+                
+                    <div class="post-intro-read">
+                        <span>Word count: <span class="post-count word-count">1.1k</span>Reading time: <span class="post-count reading-time">4 min</span></span>
+                    </div>
+                
+                <div class="post-intro-meta">
+                    <span class="post-intro-calander iconfont-archer">&#xe676;</span>
+                    <span class="post-intro-time">2018/04/10</span>
+                    
+                    <span id="busuanzi_container_page_pv" class="busuanzi-pv">
+                        <span class="iconfont-archer">&#xe602;</span>
+                        <span id="busuanzi_value_page_pv"></span>
+                    </span>
+                    
+                    <span class="shareWrapper">
+                        <span class="iconfont-archer shareIcon">&#xe71d;</span>
+                        <span class="shareText">Share</span>
+                        <ul class="shareList">
+                            <li class="iconfont-archer share-qr" data-type="qr">&#xe75b;
+                                <div class="share-qrcode"></div>
+                            </li>
+                            <li class="iconfont-archer" data-type="weibo">&#xe619;</li>
+                            <li class="iconfont-archer" data-type="qzone">&#xe62e;</li>
+                            <li class="iconfont-archer" data-type="twitter">&#xe634;</li>
+                            <li class="iconfont-archer" data-type="facebook">&#xe67a;</li>
+                        </ul>
+                    </span>
+                </div>
+            </div>
+        
+    </div>
+</div>
+        <script>
+ 
+  // get user agent
+  var browser = {
+    versions: function () {
+      var u = window.navigator.userAgent;
+      return {
+        userAgent: u,
+        trident: u.indexOf('Trident') > -1, //IE内核
+        presto: u.indexOf('Presto') > -1, //opera内核
+        webKit: u.indexOf('AppleWebKit') > -1, //苹果、谷歌内核
+        gecko: u.indexOf('Gecko') > -1 && u.indexOf('KHTML') == -1, //火狐内核
+        mobile: !!u.match(/AppleWebKit.*Mobile.*/), //是否为移动终端
+        ios: !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/), //ios终端
+        android: u.indexOf('Android') > -1 || u.indexOf('Linux') > -1, //android终端或者uc浏览器
+        iPhone: u.indexOf('iPhone') > -1 || u.indexOf('Mac') > -1, //是否为iPhone或者安卓QQ浏览器
+        iPad: u.indexOf('iPad') > -1, //是否为iPad
+        webApp: u.indexOf('Safari') == -1, //是否为web应用程序，没有头部与底部
+        weixin: u.indexOf('MicroMessenger') == -1, //是否为微信浏览器
+        uc: u.indexOf('UCBrowser') > -1 //是否为android下的UC浏览器
+      };
+    }()
+  }
+  console.log("userAgent:" + browser.versions.userAgent);
+
+  // callback
+  function fontLoaded() {
+    console.log('font loaded');
+    if (document.getElementsByClassName('site-intro-meta')) {
+      document.getElementsByClassName('intro-title')[0].classList.add('intro-fade-in');
+      document.getElementsByClassName('intro-subtitle')[0].classList.add('intro-fade-in');
+      var postIntros = document.getElementsByClassName('post-intros')[0]
+      if (postIntros) {
+        postIntros.classList.add('post-fade-in');
+      }
+    }
+  }
+
+  // UC不支持跨域，所以直接显示
+  function asyncCb(){
+    if (browser.versions.uc) {
+      console.log("UCBrowser");
+      fontLoaded();
+    } else {
+      WebFont.load({
+        custom: {
+          families: ['Oswald-Regular']
+        },
+        loading: function () {  //所有字体开始加载
+          // console.log('loading');
+        },
+        active: function () {  //所有字体已渲染
+          fontLoaded();
+        },
+        inactive: function () { //字体预加载失败，无效字体或浏览器不支持加载
+          console.log('inactive: timeout');
+          fontLoaded();
+        },
+        timeout: 5000 // Set the timeout to two seconds
+      });
+    }
+  }
+
+  function asyncErr(){
+    console.warn('script load from CDN failed, will load local script')
+  }
+
+  // load webfont-loader async, and add callback function
+  function async(u, cb, err) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (cb) { o.addEventListener('load', function (e) { cb(null, e); }, false); }
+    if (err) { o.addEventListener('error', function (e) { err(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+
+  var asyncLoadWithFallBack = function(arr, success, reject) {
+      var currReject = function(){
+        reject()
+        arr.shift()
+        if(arr.length)
+          async(arr[0], success, currReject)
+        }
+
+      async(arr[0], success, currReject)
+  }
+
+  asyncLoadWithFallBack([
+    "https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js", 
+    "https://cdn.bootcss.com/webfont/1.6.28/webfontloader.js",
+    "/lib/webfontloader.min.js"
+  ], asyncCb, asyncErr)
+</script>        
+        <img class="loading" src="/assets/loading.svg" style="display: block; margin: 6rem auto 0 auto; width: 6rem; height: 6rem;" />
+        <div class="container container-unloaded">
+            <main class="main post-page">
+    <article class="article-entry">
+        <p>最近在做oom,简单的总结下相关知识</p>
+<p><strong>Out Of Memory 是 Jetsam同过响应压力通知杀掉优先级内消耗内存太多的进程, 导致应用闪退的一种现象，难于捕获和分析。</strong></p>
+<h2 id="技术点："><a href="#技术点：" class="headerlink" title="技术点："></a>技术点：</h2><pre><code>1. iOS 内存分配系统的实现
+2. 如何抓到回调与如何监控
+3. 数据结构设计
+4. iOS abort机制
+5. OOM事件捕获</code></pre><h2 id="iOS内存分配系统的实现（用户层级）"><a href="#iOS内存分配系统的实现（用户层级）" class="headerlink" title="iOS内存分配系统的实现（用户层级）"></a>iOS内存分配系统的实现（用户层级）</h2><p>iOS中，内存堆分配的基本控制者是 malloc_zone, 通常是default_zone. 实际上是一个 scallable zone. 我们的通过malloc 分配的内存都是 通过Zone中的空闲内存块链表中获取的. 实际上Zone 从VMPage获取4k对齐的内存(mvm_allocate_pages). 然后再分给我们小块的，效率高，我们通过malloc分配内存，就不必每次都需要申请vmpages. malloc 内存申请分为 tiny, small, large… </p>
+<h3 id="虚拟内存分配相关的知识："><a href="#虚拟内存分配相关的知识：" class="headerlink" title="虚拟内存分配相关的知识："></a>虚拟内存分配相关的知识：</h3><p>vm_map, vm_map_entry, vm_object, vm_page, vm_object, vm_page<br>对虚拟内存页面的调用都在bsd/kern/kern_mman.c中实现。</p>
+<h3 id="物理内存-pmap…"><a href="#物理内存-pmap…" class="headerlink" title="物理内存: pmap…"></a>物理内存: pmap…</h3><h2 id="iOS-abort-机制"><a href="#iOS-abort-机制" class="headerlink" title="iOS abort 机制"></a>iOS abort 机制</h2><h3 id="Pageout"><a href="#Pageout" class="headerlink" title="Pageout"></a>Pageout</h3><p>管理页面交换的策略，判断哪些页面需要写回到其后备存储。<br>垃圾回收线程 (vm_pageout_grabage_collect())  调用 consider_pressure_events -&gt; vm_dispatch_memory_pressure() -&gt; BSD -&gt; NOTE_VM_PRESSURE-&gt; 响应压力通知<br>如果进程并不是总能找到可以抛弃的内存，当这种协作方法失败时，Jetsam机制介入。</p>
+<h3 id="Jetsam"><a href="#Jetsam" class="headerlink" title="Jetsam"></a>Jetsam</h3><p>通过响应压力通知杀掉优先级内消耗内存太多的进程。<br>BSD层起了一个内核优先级最高的线程VM_memorystatus，这个线程会在维护两个列表，一个是我们之前提到的基于进程优先级的进程列表，还有一个是所谓的内存快照列表，即保存了每个进程消耗的内存页memorystatus_jetsam_snapshot。<br>这个常驻线程接受从内核对于内存的守护程序pageout通过内核调用给每个App进程发送的内存压力通知，来处理事件，这个事件转发成上层的UI事件就是平常我们会收到的全局内存警告或者每个ViewController里面的didReceiveMemoryWarning。</p>
+<h4 id="杀的类别"><a href="#杀的类别" class="headerlink" title="杀的类别"></a>杀的类别</h4><p>读了一下源码，发现 杀的机制有如下两种，他们大致的执行流程如下</p>
+<p><strong>highwater 的处理 -&gt; 我们App占用的内存不要超过限制</strong><br>    1. 从优先级列表里循环寻找线程<br>    2. 判断是否满足p_memstat_memlimit的限制条件<br>    3. DiagnoseActive, FREEZE过滤<br>    4. 杀进程，杀到了exit, 否则继续循环</p>
+<p><strong>memorystatus_act_aggressive处理 -&gt; 内存占用高按优先级杀</strong><br>    1. 根据policy加载 jld_bucket_count， 用来判断是否开杀<br>    2. 从JETSAM_PRIORITY_ELEVATED_INACTIVE 开始杀<br>    3. jld_bucket_count 和 memorystatus_jld_eval_period_msecs 判断是否开杀<br>    4. 根据优先级从低向高杀，直到memorystatus_avail_pages_below_pressure</p>
+<h4 id="触发入口"><a href="#触发入口" class="headerlink" title="触发入口"></a>触发入口</h4><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta"># static boolean_t</span></span><br><span class="line">memorystatus_action_needed(<span class="keyword">void</span>)</span><br><span class="line">&#123;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">if</span> CONFIG_EMBEDDED</span></span><br><span class="line">    <span class="keyword">return</span> (is_reason_thrashing(kill_under_pressure_cause) ||</span><br><span class="line">            is_reason_zone_map_exhaustion(kill_under_pressure_cause) ||</span><br><span class="line">           memorystatus_available_pages &lt;= memorystatus_available_pages_pressure);</span><br><span class="line"><span class="meta">#<span class="meta-keyword">else</span> <span class="comment">/* CONFIG_EMBEDDED */</span></span></span><br><span class="line">    <span class="keyword">return</span> (is_reason_thrashing(kill_under_pressure_cause) ||</span><br><span class="line">            is_reason_zone_map_exhaustion(kill_under_pressure_cause));</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span> <span class="comment">/* CONFIG_EMBEDDED */</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><strong>针对这种情况我们可以</strong></p>
+<p>memorystatus_action_needed 判断 -&gt; 规避Jetsam处理<br>    1. 是否因为thrashing(如果是EMBEDED则不会触发这种情况)<br>    2. 是否因为zone_map_exhaustion(判断Zone的消耗情况, vm_map 相关参数来做，感觉这个意义不大)<br>    3. 是否因为memorystatus_available_pages &lt;= memorystatus_available_pages_pressure(是否是EMBEDDED)(根据物理内存page占比计算得到) -&gt; boot_arguments…能取到(外部拿不到，只能走内核调试拿.. )</p>
+<h3 id="watchdog"><a href="#watchdog" class="headerlink" title="watchdog"></a>watchdog</h3><p>为了避免应用陷入错误状态导致界面无响应，Apple 设计了看门狗 (WatchDog) 机制。一旦超时，强制杀死进程。在不同的生命周期，触发看门狗机制的超时时间有所不同：</p>
+<table>
+<thead>
+<tr>
+<th>生命周期</th>
+<th>超时时间</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>启动 Launch</td>
+<td>20 s</td>
+</tr>
+<tr>
+<td>恢复 Resume</td>
+<td>10 s</td>
+</tr>
+<tr>
+<td>悬挂 Suspend</td>
+<td>10 s</td>
+</tr>
+<tr>
+<td>退出 Quit</td>
+<td>6 s</td>
+</tr>
+<tr>
+<td>后台 Background</td>
+<td>10 min</td>
+</tr>
+</tbody></table>
+<h3 id="如何抓到回调与如何监控"><a href="#如何抓到回调与如何监控" class="headerlink" title="如何抓到回调与如何监控"></a>如何抓到回调与如何监控</h3><p><strong>抓到</strong>：libmalloc 中的 malloc_logger 函数指针。通过这个可以抓到所有malloc类分配。<br>vm 则可以根据hook或者私有变量，和 malloc_logger一致。</p>
+<p><strong>监控</strong>: 每次抓到都获取调用栈，存储进自己定义的数据结构中。  这里为什么不会循环调用需要值得注意一下。是通过不同的逻辑分支，保证不会走到相同的带分配的逻辑分支。</p>
+<h3 id="数据结构设计"><a href="#数据结构设计" class="headerlink" title="数据结构设计"></a>数据结构设计</h3><pre><code>1. 空间占用
+2. 访问速度
+3. 细节存储优化</code></pre><h3 id="OOM事件捕获"><a href="#OOM事件捕获" class="headerlink" title="OOM事件捕获"></a>OOM事件捕获</h3><ol>
+<li>现有方案，排除法</li>
+<li>存在的问题 applicationstate不准等</li>
+<li>经验值+ANR 优化</li>
+</ol>
+
+    </article>
+    <!-- license  -->
+    
+        <div class="license-wrapper">
+            <p>Author：<a href="http://yoursite.com">junyixie</a>
+            <p>原文链接：<a href="http://yoursite.com/2018/04/10/iosoom/">http://yoursite.com/2018/04/10/iosoom/</a>
+            <p>发表日期：<a href="http://yoursite.com/2018/04/10/iosoom/">April 10th 2018, 8:30:35 pm</a>
+            <p>更新日期：<a href="http://yoursite.com/2018/04/10/iosoom/">November 26th 2019, 11:31:18 pm</a>
+            <p>版权声明：本文采用<a rel="license noopener" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>进行许可</p>
+        </div>
+    
+    <!-- paginator  -->
+    <ul class="post-paginator">
+        <li class="next">
+            
+                <div class="nextSlogan">Next Post</div>
+                <a href= "/2018/04/13/dependency/" title= "关于架构和编码的思考">
+                    <div class="nextTitle">关于架构和编码的思考</div>
+                </a>
+            
+        </li>
+        <li class="previous">
+            
+                <div class="prevSlogan">Previous Post</div>
+                <a href= "/2018/01/15/sharedlibraryandpic/" title= "fishhook与共享库和PIC">
+                    <div class="prevTitle">fishhook与共享库和PIC</div>
+                </a>
+            
+        </li>
+    </ul>
+    <!-- 评论插件 -->
+    <!-- 来必力City版安装代码 -->
+
+<!-- City版安装代码已完成 -->
+    
+    
+    <!-- gitalk评论 -->
+
+    <!-- utteranc评论 -->
+
+    <!-- partial('_partial/comment/changyan') -->
+    <!--PC版-->
+
+
+    
+    
+
+    <!-- 评论 -->
+</main>
+            <!-- profile -->
+            
+        </div>
+        <footer class="footer footer-unloaded">
+    <!-- social  -->
+    
+    <div class="social">
+        
+    
+        
+            
+                <a href="mailto:xie.junyi@outlook.com" target="_blank" rel="noopener" class="iconfont-archer email" title=email ></a>
+            
+        
+    
+        
+            
+                <a href="//github.com/junyixie" class="iconfont-archer github" target="_blank" title=github></a>
+            
+        
+    
+        
+            
+                <span class="iconfont-archer wechat" title=wechat>
+                  
+                  <img class="profile-qr" src="/assets/example_qr.png" />
+                </span>
+            
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+
+    </div>
+    
+    <!-- powered by Hexo  -->
+    <div class="copyright">
+        <span id="hexo-power">Powered by <a href="https://hexo.io/" target="_blank">Hexo</a></span><span class="iconfont-archer power">&#xe635;</span><span id="theme-info">theme <a href="https://github.com/fi3ework/hexo-theme-archer" target="_blank">Archer</a></span>
+    </div>
+    <!-- 不蒜子  -->
+    
+    <div class="busuanzi-container">
+    
+     
+    <span id="busuanzi_container_site_pv">PV: <span id="busuanzi_value_site_pv"></span> :)</span>
+    
+    </div>
+    
+</footer>
+    </div>
+    <!-- toc -->
+    
+    <div class="toc-wrapper" style=
+    
+
+
+
+
+
+
+
+top:50vh;
+
+    >
+        <div class="toc-catalog">
+            <span class="iconfont-archer catalog-icon">&#xe613;</span><span>CATALOG</span>
+        </div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#技术点："><span class="toc-number">1.</span> <span class="toc-text">技术点：</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#iOS内存分配系统的实现（用户层级）"><span class="toc-number">2.</span> <span class="toc-text">iOS内存分配系统的实现（用户层级）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#虚拟内存分配相关的知识："><span class="toc-number">2.1.</span> <span class="toc-text">虚拟内存分配相关的知识：</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#物理内存-pmap…"><span class="toc-number">2.2.</span> <span class="toc-text">物理内存: pmap…</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#iOS-abort-机制"><span class="toc-number">3.</span> <span class="toc-text">iOS abort 机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Pageout"><span class="toc-number">3.1.</span> <span class="toc-text">Pageout</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Jetsam"><span class="toc-number">3.2.</span> <span class="toc-text">Jetsam</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#杀的类别"><span class="toc-number">3.2.1.</span> <span class="toc-text">杀的类别</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#触发入口"><span class="toc-number">3.2.2.</span> <span class="toc-text">触发入口</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#watchdog"><span class="toc-number">3.3.</span> <span class="toc-text">watchdog</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#如何抓到回调与如何监控"><span class="toc-number">3.4.</span> <span class="toc-text">如何抓到回调与如何监控</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#数据结构设计"><span class="toc-number">3.5.</span> <span class="toc-text">数据结构设计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#OOM事件捕获"><span class="toc-number">3.6.</span> <span class="toc-text">OOM事件捕获</span></a></li></ol></li></ol>
+    </div>
+    
+    <div class="back-top iconfont-archer">&#xe639;</div>
+    <div class="sidebar sidebar-hide">
+    <ul class="sidebar-tabs sidebar-tabs-active-0">
+        <li class="sidebar-tab-archives"><span class="iconfont-archer">&#xe67d;</span><span class="tab-name">Archive</span></li>
+        <li class="sidebar-tab-tags"><span class="iconfont-archer">&#xe61b;</span><span class="tab-name">Tag</span></li>
+        <li class="sidebar-tab-categories"><span class="iconfont-archer">&#xe666;</span><span class="tab-name">Cate</span></li>
+    </ul>
+    <div class="sidebar-content sidebar-content-show-archive">
+          <div class="sidebar-panel-archives">
+    <!-- 在ejs中将archive按照时间排序 -->
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <div class="total-and-search">
+        <div class="total-archive">
+        Total : 29
+        </div>
+        <!-- search  -->
+        
+    </div>
+    
+    <div class="post-archive">
+    
+    
+    
+    
+    <div class="archive-year"> 2020 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2020/10/05/cpythonstrip/" >cpython3.8瘦身到0.95mb</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2020/04/10/objcblockimp/" >imp_implementationWithBlock 的内部实现 trampoline</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/08</span><a class="archive-post-title" href= "/2020/04/08/lliread/" >lli源码阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/01</span><a class="archive-post-title" href= "/2020/04/01/MachOObjC/" >MachO（一） ObjC类结构的加载</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/25</span><a class="archive-post-title" href= "/2020/03/25/DobbyRead/" >Dobby源码学习（一） Inline Hook</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/19</span><a class="archive-post-title" href= "/2020/03/19/cocoapods-new-feature/" >cocoapods 新feature 开发 Example, On Demand Resource</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/04</span><a class="archive-post-title" href= "/2020/03/04/lazybind/" >dyld(2) lazy bind 和 dyld_stub_binder</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/03</span><a class="archive-post-title" href= "/2020/03/03/macholinkedit/" >dyld(1) MachO Linkedit 段</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/19</span><a class="archive-post-title" href= "/2020/02/19/crashruntimeinfo/" >Block ABI 文档阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/12</span><a class="archive-post-title" href= "/2020/02/12/iosdevdebug/" >iOS开发必备的问题定位调试技巧</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2019 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">11/26</span><a class="archive-post-title" href= "/2019/11/26/projectpodenv/" >CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2019/10/05/cocoapodsdev/" >CocoaPods插件开发原理(一) CocoaPods做了啥</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/28</span><a class="archive-post-title" href= "/2019/09/28/CrashMonitorSystem/" >崩溃捕获系统的原理（一）异常信号</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2018 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/30</span><a class="archive-post-title" href= "/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" >DWARF和符号化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/16</span><a class="archive-post-title" href= "/2018/09/16/CrashSymbolicateSystemDesign/" >APM Crash系统</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">06/13</span><a class="archive-post-title" href= "/2018/06/13/libmalloc/" >libmalloc "malloc" 探究</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/13</span><a class="archive-post-title" href= "/2018/04/13/dependency/" >关于架构和编码的思考</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2018/04/10/iosoom/" >iOS OOM</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2018/01/15/sharedlibraryandpic/" >fishhook与共享库和PIC</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2017 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/24</span><a class="archive-post-title" href= "/2017/12/24/In-depthUnderStandingOfThreadSafety/" >理解线程安全</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/04</span><a class="archive-post-title" href= "/2017/12/04/safeSwizzleRSSwizzleAnalyze/" >Method Swizzling 的正确途径</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/27</span><a class="archive-post-title" href= "/2017/10/27/dyld3withappstart/" >链接和App启动速度优化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/26</span><a class="archive-post-title" href= "/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/" >理解HTTPS</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">05/01</span><a class="archive-post-title" href= "/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/" >Objective-C 深入理解中的消息机制和方法调用</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/20</span><a class="archive-post-title" href= "/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" >Cocoa 深入理解KVO</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/06</span><a class="archive-post-title" href= "/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/" >理解 Objc Runtime</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/01</span><a class="archive-post-title" href= "/2017/02/01/Objective-C-weak-%E5%85%B3%E9%94%AE%E5%AD%97-%E5%AE%9E%E7%8E%B0-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Objective-C weak 关键字 实现 源码分析</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/24</span><a class="archive-post-title" href= "/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/" >iOS Core Animation性能调优 笔记</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2017/01/15/Aspects-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Aspects 源码分析</a>
+        </li>
+    
+    </div>
+  </div>
+        <div class="sidebar-panel-tags">
+    <div class="sidebar-tags-name">
+    
+    </div>
+    <div class="iconfont-archer sidebar-tags-empty">&#xe678;</div>
+    <div class="tag-load-fail" style="display: none; color: #ccc; font-size: 0.6rem;">
+    缺失模块。<br/>
+    1、请确保node版本大于6.2<br/>
+    2、在博客根目录（注意不是archer根目录）执行以下命令：<br/>
+    <span style="color: #f75357; font-size: 1rem; line-height: 2rem;">npm i hexo-generator-json-content --save</span><br/>
+    3、在根目录_config.yml里添加配置：
+    <pre style="color: #787878; font-size: 0.6rem;">
+jsonContent:
+  meta: false
+  pages: false
+  posts:
+    title: true
+    date: true
+    path: true
+    text: false
+    raw: false
+    content: false
+    slug: false
+    updated: false
+    comments: false
+    link: false
+    permalink: false
+    excerpt: false
+    categories: true
+    tags: true</pre>
+    </div> 
+    <div class="sidebar-tags-list"></div>
+</div>
+        <div class="sidebar-panel-categories">
+    <div class="sidebar-categories-name">
+    
+        <span class="sidebar-category-name" data-categories="iOS"><span class="iconfont-archer">&#xe60a;</span>iOS</span>
+    
+        <span class="sidebar-category-name" data-categories="源码分析"><span class="iconfont-archer">&#xe60a;</span>源码分析</span>
+    
+        <span class="sidebar-category-name" data-categories="APM"><span class="iconfont-archer">&#xe60a;</span>APM</span>
+    
+        <span class="sidebar-category-name" data-categories="设计架构"><span class="iconfont-archer">&#xe60a;</span>设计架构</span>
+    
+        <span class="sidebar-category-name" data-categories="研发流程"><span class="iconfont-archer">&#xe60a;</span>研发流程</span>
+    
+        <span class="sidebar-category-name" data-categories="Hook"><span class="iconfont-archer">&#xe60a;</span>Hook</span>
+    
+    </div>
+    <div class="iconfont-archer sidebar-categories-empty">&#xe678;</div>
+    <div class="sidebar-categories-list"></div>
+</div>
+    </div>
+</div> 
+    <script>
+    var siteMeta = {
+        root: "/",
+        author: "junyixie"
+    }
+</script>
+    <!-- CDN failover -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+    <script type="text/javascript">
+        if (typeof window.$ === 'undefined')
+        {
+            console.warn('jquery load from jsdelivr failed, will load local script')
+            document.write('<script src="/lib/jquery.min.js">\x3C/script>')
+        }
+    </script>
+    <script src="/scripts/main.js"></script>
+    <!-- algolia -->
+    
+    <!-- busuanzi  -->
+    
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    
+    <!-- CNZZ  -->
+    
+    </div>
+    <!-- async load share.js -->
+    
+        <script src="/scripts/share.js" async></script>    
+     
+    </body>
+</html>
+
+

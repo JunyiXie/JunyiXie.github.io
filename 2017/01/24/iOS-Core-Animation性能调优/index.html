@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+    <!-- title -->
+
+
+
+
+<!-- keywords -->
+
+
+
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" >
+    <meta name="author" content="junyixie">
+    <meta name="renderer" content="webkit">
+    <meta name="copyright" content="junyixie">
+    
+    <meta name="keywords" content="hexo,hexo-theme,hexo-blog,blog,谢俊逸">
+    
+    <meta name="description" content="">
+    <meta name="description" content="高效绘图一些关键词软件绘图上下文：指代软件绘图（意即：不由GPU协助 的绘图）软件绘图通常是由Core Graphics框架完成来完成  绘制速度 OpenGL&amp;gt;Core Animation&amp;gt;Core Graphics   消耗可观的内存  CALayer 只需要一些与自己相关 的内存：只有它的寄宿图会消耗一定的内存空间。即使直接赋给 contents 属性一 张图片，也不需要增加额外">
+<meta property="og:type" content="article">
+<meta property="og:title" content="iOS Core Animation性能调优 笔记">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2017&#x2F;01&#x2F;24&#x2F;iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="高效绘图一些关键词软件绘图上下文：指代软件绘图（意即：不由GPU协助 的绘图）软件绘图通常是由Core Graphics框架完成来完成  绘制速度 OpenGL&amp;gt;Core Animation&amp;gt;Core Graphics   消耗可观的内存  CALayer 只需要一些与自己相关 的内存：只有它的寄宿图会消耗一定的内存空间。即使直接赋给 contents 属性一 张图片，也不需要增加额外">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2018-05-26T11:27:59.000Z">
+<meta name="twitter:card" content="summary">
+    <meta http-equiv="Cache-control" content="no-cache">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    
+    <title>iOS Core Animation性能调优 笔记 · xiejunyi,谢俊逸</title>
+    <style type="text/css">
+    @font-face {
+        font-family: 'Oswald-Regular';
+        src: url("/font/Oswald-Regular.ttf");
+    }
+
+    body {
+        margin: 0;
+    }
+
+    header,
+    footer,
+    .back-top,
+    .sidebar,
+    .container,
+    .site-intro-meta,
+    .toc-wrapper {
+        display: none;
+    }
+
+    .site-intro {
+        position: relative;
+        z-index: 3;
+        width: 100%;
+        /* height: 50vh; */
+        overflow: hidden;
+    }
+
+    .site-intro-placeholder {
+        position: absolute;
+        z-index: -2;
+        top: 0;
+        left: 0;
+        width: calc(100% + 300px);
+        height: 100%;
+        background: repeating-linear-gradient(-45deg, #444 0, #444 80px, #333 80px, #333 160px);
+        background-position: center center;
+        transform: translate3d(-226px, 0, 0);
+        animation: gradient-move 2.5s ease-out 0s infinite;
+    }
+
+    @keyframes gradient-move {
+        0% {
+            transform: translate3d(-226px, 0, 0);
+        }
+        100% {
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+</style>
+
+    <link rel="preload" href= "/css/style.css?v=20180824" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    <link rel="stylesheet" href= "/css/mobile.css?v=20180824" media="(max-width: 980px)">
+    
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    
+    <!-- /*! loadCSS. [c]2017 Filament Group, Inc. MIT License */
+/* This file is meant as a standalone workflow for
+- testing support for link[rel=preload]
+- enabling async CSS loading in browsers that do not support rel=preload
+- applying rel preload css once loaded, whether supported or not.
+*/ -->
+<script>
+(function( w ){
+	"use strict";
+	// rel=preload support test
+	if( !w.loadCSS ){
+		w.loadCSS = function(){};
+	}
+	// define on the loadCSS obj
+	var rp = loadCSS.relpreload = {};
+	// rel=preload feature support test
+	// runs once and returns a function for compat purposes
+	rp.support = (function(){
+		var ret;
+		try {
+			ret = w.document.createElement( "link" ).relList.supports( "preload" );
+		} catch (e) {
+			ret = false;
+		}
+		return function(){
+			return ret;
+		};
+	})();
+
+	// if preload isn't supported, get an asynchronous load by using a non-matching media attribute
+	// then change that media back to its intended value on load
+	rp.bindMediaToggle = function( link ){
+		// remember existing media attr for ultimate state, or default to 'all'
+		var finalMedia = link.media || "all";
+
+		function enableStylesheet(){
+			link.media = finalMedia;
+		}
+
+		// bind load handlers to enable media
+		if( link.addEventListener ){
+			link.addEventListener( "load", enableStylesheet );
+		} else if( link.attachEvent ){
+			link.attachEvent( "onload", enableStylesheet );
+		}
+
+		// Set rel and non-applicable media type to start an async request
+		// note: timeout allows this to happen async to let rendering continue in IE
+		setTimeout(function(){
+			link.rel = "stylesheet";
+			link.media = "only x";
+		});
+		// also enable media after 3 seconds,
+		// which will catch very old browsers (android 2.x, old firefox) that don't support onload on link
+		setTimeout( enableStylesheet, 3000 );
+	};
+
+	// loop through link elements in DOM
+	rp.poly = function(){
+		// double check this to prevent external calls from running
+		if( rp.support() ){
+			return;
+		}
+		var links = w.document.getElementsByTagName( "link" );
+		for( var i = 0; i < links.length; i++ ){
+			var link = links[ i ];
+			// qualify links to those with rel=preload and as=style attrs
+			if( link.rel === "preload" && link.getAttribute( "as" ) === "style" && !link.getAttribute( "data-loadcss" ) ){
+				// prevent rerunning on link
+				link.setAttribute( "data-loadcss", true );
+				// bind listeners to toggle media back
+				rp.bindMediaToggle( link );
+			}
+		}
+	};
+
+	// if unsupported, run the polyfill
+	if( !rp.support() ){
+		// run once at least
+		rp.poly();
+
+		// rerun poly on an interval until onload
+		var run = w.setInterval( rp.poly, 500 );
+		if( w.addEventListener ){
+			w.addEventListener( "load", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		} else if( w.attachEvent ){
+			w.attachEvent( "onload", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		}
+	}
+
+
+	// commonjs
+	if( typeof exports !== "undefined" ){
+		exports.loadCSS = loadCSS;
+	}
+	else {
+		w.loadCSS = loadCSS;
+	}
+}( typeof global !== "undefined" ? global : this ) );
+</script>
+
+    <link rel="icon" href= "/assets/favicon.ico" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js" as="script" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js" as="script" />
+    <link rel="preload" href="/scripts/main.js" as="script" />
+    <link rel="preload" as="font" href="/font/Oswald-Regular.ttf" crossorigin>
+    <link rel="preload" as="font" href="https://at.alicdn.com/t/font_327081_1dta1rlogw17zaor.woff" crossorigin>
+    
+    <!-- fancybox -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.js" defer></script>
+    <!-- 百度统计  -->
+    
+    <!-- 谷歌统计  -->
+    
+</head>
+
+    
+        <body class="post-body">
+    
+    
+<header class="header">
+
+    <div class="read-progress"></div>
+    <div class="header-sidebar-menu">&#xe775;</div>
+    <!-- post页的toggle banner  -->
+    
+    <div class="banner">
+            <div class="blog-title">
+                <a href="/" >xiejunyi&#39;s blog.</a>
+            </div>
+            <div class="post-title">
+                <a href="#" class="post-name">iOS Core Animation性能调优 笔记</a>
+            </div>
+    </div>
+    
+    <a class="home-link" href=/>xiejunyi's blog.</a>
+</header>
+    <div class="wrapper">
+        <div class="site-intro" style="
+
+
+
+
+
+
+
+height:50vh;
+">
+    
+    <!-- 主页  -->
+    
+    
+    <!-- 404页  -->
+            
+    <div class="site-intro-placeholder"></div>
+    <div class="site-intro-img" style="background-image: url(/intro/post-bg.jpg)"></div>
+    <div class="site-intro-meta">
+        <!-- 标题  -->
+        <h1 class="intro-title">
+            <!-- 主页  -->
+            
+            iOS Core Animation性能调优 笔记
+            <!-- 404 -->
+            
+        </h1>
+        <!-- 副标题 -->
+        <p class="intro-subtitle">
+            <!-- 主页副标题  -->
+            
+            
+            <!-- 404 -->
+            
+        </p>
+        <!-- 文章页meta -->
+        
+            <div class="post-intros">
+                <!-- 文章页标签  -->
+                
+                
+                    <div class="post-intro-read">
+                        <span>Word count: <span class="post-count word-count">6.2k</span>Reading time: <span class="post-count reading-time">23 min</span></span>
+                    </div>
+                
+                <div class="post-intro-meta">
+                    <span class="post-intro-calander iconfont-archer">&#xe676;</span>
+                    <span class="post-intro-time">2017/01/24</span>
+                    
+                    <span id="busuanzi_container_page_pv" class="busuanzi-pv">
+                        <span class="iconfont-archer">&#xe602;</span>
+                        <span id="busuanzi_value_page_pv"></span>
+                    </span>
+                    
+                    <span class="shareWrapper">
+                        <span class="iconfont-archer shareIcon">&#xe71d;</span>
+                        <span class="shareText">Share</span>
+                        <ul class="shareList">
+                            <li class="iconfont-archer share-qr" data-type="qr">&#xe75b;
+                                <div class="share-qrcode"></div>
+                            </li>
+                            <li class="iconfont-archer" data-type="weibo">&#xe619;</li>
+                            <li class="iconfont-archer" data-type="qzone">&#xe62e;</li>
+                            <li class="iconfont-archer" data-type="twitter">&#xe634;</li>
+                            <li class="iconfont-archer" data-type="facebook">&#xe67a;</li>
+                        </ul>
+                    </span>
+                </div>
+            </div>
+        
+    </div>
+</div>
+        <script>
+ 
+  // get user agent
+  var browser = {
+    versions: function () {
+      var u = window.navigator.userAgent;
+      return {
+        userAgent: u,
+        trident: u.indexOf('Trident') > -1, //IE内核
+        presto: u.indexOf('Presto') > -1, //opera内核
+        webKit: u.indexOf('AppleWebKit') > -1, //苹果、谷歌内核
+        gecko: u.indexOf('Gecko') > -1 && u.indexOf('KHTML') == -1, //火狐内核
+        mobile: !!u.match(/AppleWebKit.*Mobile.*/), //是否为移动终端
+        ios: !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/), //ios终端
+        android: u.indexOf('Android') > -1 || u.indexOf('Linux') > -1, //android终端或者uc浏览器
+        iPhone: u.indexOf('iPhone') > -1 || u.indexOf('Mac') > -1, //是否为iPhone或者安卓QQ浏览器
+        iPad: u.indexOf('iPad') > -1, //是否为iPad
+        webApp: u.indexOf('Safari') == -1, //是否为web应用程序，没有头部与底部
+        weixin: u.indexOf('MicroMessenger') == -1, //是否为微信浏览器
+        uc: u.indexOf('UCBrowser') > -1 //是否为android下的UC浏览器
+      };
+    }()
+  }
+  console.log("userAgent:" + browser.versions.userAgent);
+
+  // callback
+  function fontLoaded() {
+    console.log('font loaded');
+    if (document.getElementsByClassName('site-intro-meta')) {
+      document.getElementsByClassName('intro-title')[0].classList.add('intro-fade-in');
+      document.getElementsByClassName('intro-subtitle')[0].classList.add('intro-fade-in');
+      var postIntros = document.getElementsByClassName('post-intros')[0]
+      if (postIntros) {
+        postIntros.classList.add('post-fade-in');
+      }
+    }
+  }
+
+  // UC不支持跨域，所以直接显示
+  function asyncCb(){
+    if (browser.versions.uc) {
+      console.log("UCBrowser");
+      fontLoaded();
+    } else {
+      WebFont.load({
+        custom: {
+          families: ['Oswald-Regular']
+        },
+        loading: function () {  //所有字体开始加载
+          // console.log('loading');
+        },
+        active: function () {  //所有字体已渲染
+          fontLoaded();
+        },
+        inactive: function () { //字体预加载失败，无效字体或浏览器不支持加载
+          console.log('inactive: timeout');
+          fontLoaded();
+        },
+        timeout: 5000 // Set the timeout to two seconds
+      });
+    }
+  }
+
+  function asyncErr(){
+    console.warn('script load from CDN failed, will load local script')
+  }
+
+  // load webfont-loader async, and add callback function
+  function async(u, cb, err) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (cb) { o.addEventListener('load', function (e) { cb(null, e); }, false); }
+    if (err) { o.addEventListener('error', function (e) { err(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+
+  var asyncLoadWithFallBack = function(arr, success, reject) {
+      var currReject = function(){
+        reject()
+        arr.shift()
+        if(arr.length)
+          async(arr[0], success, currReject)
+        }
+
+      async(arr[0], success, currReject)
+  }
+
+  asyncLoadWithFallBack([
+    "https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js", 
+    "https://cdn.bootcss.com/webfont/1.6.28/webfontloader.js",
+    "/lib/webfontloader.min.js"
+  ], asyncCb, asyncErr)
+</script>        
+        <img class="loading" src="/assets/loading.svg" style="display: block; margin: 6rem auto 0 auto; width: 6rem; height: 6rem;" />
+        <div class="container container-unloaded">
+            <main class="main post-page">
+    <article class="article-entry">
+        <h2 id="高效绘图"><a href="#高效绘图" class="headerlink" title="高效绘图"></a>高效绘图</h2><h3 id="一些关键词"><a href="#一些关键词" class="headerlink" title="一些关键词"></a>一些关键词</h3><h3 id="软件绘图"><a href="#软件绘图" class="headerlink" title="软件绘图"></a>软件绘图</h3><p>上下文：指代软件绘图（意即：不由GPU协助 的绘图）软件绘图通常是由Core Graphics框架完成来完成</p>
+<blockquote>
+<p>绘制速度 OpenGL&gt;Core Animation&gt;Core Graphics</p>
+</blockquote>
+<ul>
+<li>消耗可观的内存<br>  CALayer 只需要一些与自己相关 的内存：只有它的寄宿图会消耗一定的内存空间。即使直接赋给 contents 属性一 张图片，也不需要增加额外的照片存储大小。如果相同的一张图片被多个图层作 为 contents 属性，那么他们将会共用同一块内存，而不是复制内存块。<br>如果你实现了</li>
+<li>-drawLayer:inContext:</li>
+<li>-drawRect:<br>这两个方法中的任意一个方法，图层就创建了了一个绘制上下文，这个上下文需要的大小的内存可从这个算式得出：图层宽<em>图 层高</em>4字节，宽高的单位均为像素。对于一个在Retina iPad上的全屏图层来说，这 个内存量就是 2048<em>1526</em>4字节，相当于12MB内存，图层每次重绘的时候都需要 重新抹掉内存然后重新分配。<blockquote>
+<p>你应该避免重绘你的视图。提高绘制性能 的秘诀就在于尽量避免去绘制。</p>
+</blockquote>
+</li>
+</ul>
+<h3 id="矢量图形"><a href="#矢量图形" class="headerlink" title="矢量图形"></a>矢量图形</h3><p>我们用Core Graphics来绘图的一个通常原因就是只是用图片或是图层效果不能</p>
+<p>轻易地绘制出矢量图形。矢量绘图包含一下这些：</p>
+<ul>
+<li>任意多边形（不仅仅是一个矩形）</li>
+<li>斜线或曲线</li>
+<li>文本</li>
+<li>渐变</li>
+</ul>
+<p>Core Animation为这些图形类型的绘制提供了专门的类，并给他们提供硬件支持 （第六章『专有图层』有详细提到）。 CAShapeLayer 可以绘制多边形，直线和 曲线。 CATextLayer 可以绘制文本。 CAGradientLayer 用来绘制渐变。这些总<br>体上都比Core Graphics更快，同时他们也避免了创造一个寄宿图。</p>
+<h3 id="脏矩形"><a href="#脏矩形" class="headerlink" title="脏矩形"></a>脏矩形</h3><p>，Mac OS和iOS设备将会把屏幕区分为需要重绘的区域和 不需要重绘的区域。那些需要重绘的部分被称作『脏区域』。在实际应用中，鉴于 非矩形区域边界裁剪和混合的复杂性，通常会区分出包含指定视图的矩形位置，而 这个位置就是『脏矩形』。<br>但是Core Animation通常并不了 解你的自定义绘图代码，它也不能自己计算出脏区域的位置。然而，你的确可以提 供这些信息。</p>
+<p>当你检测到指定视图或图层的指定部分需要被重绘，你直接调用 - setNeedsDisplayInRect: 来标记它，然后将影响到的矩形作为参数传入。这样就</p>
+<p>会在一次视图刷新时调用视图的</p>
+<ul>
+<li>-drawRect:</li>
+</ul>
+<p>图层代理的</p>
+<ul>
+<li>-drawLayer:inContext:</li>
+</ul>
+<h3 id="异步绘制"><a href="#异步绘制" class="headerlink" title="异步绘制"></a>异步绘制</h3><p>UIKit的单线程天性意味着寄宿图通畅要在主线程上更新，这意味着绘制会打断用 户交互，甚至让整个app看起来处于无响应状态。<br>针对这个问题，有一些方法可以用到：一些情况下，我们可以推测性地提前在另 外一个线程上绘制内容，然后将由此绘出的图片直接设置为图层的内容。这实现起 来可能不是很方便，但是在特定情况下是可行的。Core Animation提供了一些选 择： CATiledLayer 和 drawsAsynchronously 属性。</p>
+<h2 id="图像IO"><a href="#图像IO" class="headerlink" title="图像IO"></a>图像IO</h2><p><strong>优化从闪存驱动器或者网络中加载和显示图片</strong></p>
+<h3 id="加载和潜伏"><a href="#加载和潜伏" class="headerlink" title="加载和潜伏"></a>加载和潜伏</h3><ul>
+<li>加载</li>
+<li>解压</li>
+</ul>
+<h4 id="线程加载"><a href="#线程加载" class="headerlink" title="线程加载"></a>线程加载</h4><ol>
+<li>图像加载的优化 异步加载图片，避免主线程堵塞</li>
+</ol>
+<p>注意事项，异步加载图片造成的问题</p>
+<p>   由于视图在UICollectionView会被循环利用，我们加载图片的时候不能确定是否被不同的索引重新复用。为了避免图片加载到错误的视图中，我们在加载前把单元格打上索引的标签，然后在设置图片的时候检测标签是否发生了改变。+</p>
+<h4 id="延迟解压"><a href="#延迟解压" class="headerlink" title="延迟解压"></a>延迟解压</h4><pre><code>当加载图片的时候，iOS通常会延迟解压图片的时间，直到加载到内存之后。这就会在准备绘制图片的时候影响性能，因为需要在绘制之前进行解压</code></pre><ul>
+<li><p>+imageNamed: 这个方法会在加载图片后立刻解压,但是只对应用资源束中的图片有效</p>
+</li>
+<li><p>+imageWithContentsOfFile:会延迟解压图片的时间，直到加载到内存之后</p>
+</li>
+<li><p>另一种立刻加载图片的方法就是把它设置成图层内容，或者是UIImageView的image属性。不幸的是，这又需要在主线程执行，所以不会对性能有所提升。</p>
+</li>
+<li><p>第三种方式就是绕过UIKit，像下面这样使用ImageIO框架：</p>
+</li>
+</ul>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">NSInteger</span> index = indexPath.row;</span><br><span class="line"><span class="built_in">NSURL</span> *imageURL = [<span class="built_in">NSURL</span> fileURLWithPath:<span class="keyword">self</span>.imagePaths[index]];</span><br><span class="line"><span class="built_in">NSDictionary</span> *options = @&#123;(__bridge <span class="keyword">id</span>)kCGImageSourceShouldCache: @YES&#125;;</span><br><span class="line"><span class="built_in">CGImageSourceRef</span> source = <span class="built_in">CGImageSourceCreateWithURL</span>((__bridge <span class="built_in">CFURLRef</span>)imageURL, <span class="literal">NULL</span>);</span><br><span class="line"><span class="built_in">CGImageRef</span> imageRef = <span class="built_in">CGImageSourceCreateImageAtIndex</span>(source, <span class="number">0</span>,(__bridge <span class="built_in">CFDictionaryRef</span>)options);</span><br><span class="line"><span class="built_in">UIImage</span> *image = [<span class="built_in">UIImage</span> imageWithCGImage:imageRef];</span><br><span class="line"><span class="built_in">CGImageRelease</span>(imageRef);</span><br><span class="line"><span class="built_in">CFRelease</span>(source);</span><br></pre></td></tr></table></figure>
+<p>这样就可以使用kCGImageSourceShouldCache来创建图片，强制图片立刻解压，然后在图片的生命周期保留解压后的版本。</p>
+<ul>
+<li>最后一种方式就是使用UIKit加载图片，但是立刻会知道CGContext中去。图片必须要在绘制之前解压，所以就强制了解压的及时性。这样的好处在于绘制图片可以再后台线程（例如加载本身）执行，而不会阻塞UI。</li>
+</ul>
+<p>有两种方式可以为强制解压提前渲染图片：</p>
+<ol>
+<li>将图片的一个像素绘制成一个像素大小的CGContext。这样仍然会解压整张图片，但是绘制本身并没有消耗任何时间。这样的好处在于加载的图片并不会在特定的设备上为绘制做优化，所以可以在任何时间点绘制出来。同样iOS也就可以丢弃解压后的图片来节省内存了。</li>
+<li>将整张图片绘制到CGContext中，丢弃原始的图片，并且用一个从上下文内容中新的图片来代替。这样比绘制单一像素那样需要更加复杂的计算，但是因此产生的图片将会为绘制做优化，而且由于原始压缩图片被抛弃了，iOS就不能够随时丢弃任何解压后的图片来节省内存了。</li>
+</ol>
+<p>需要注意的是苹果特别推荐了不要使用这些诡计来绕过标准图片解压逻辑（所以也是他们选择用默认处理方式的原因），但是如果你使用很多大图来构建应用，那如果想提升性能，就只能和系统博弈了。</p>
+<p>如果不使用+imageNamed:，那么把整张图片绘制到CGContext可能是最佳的方式了。尽管你可能认为多余的绘制相较别的解压技术而言性能不是很高，但是新创建的图片（在特定的设备上做过优化）可能比原始图片绘制的更快。</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">- (<span class="built_in">UICollectionViewCell</span> *)collectionView:(<span class="built_in">UICollectionView</span> *)collectionView</span><br><span class="line">                  cellForItemAtIndexPath:(<span class="built_in">NSIndexPath</span> *)indexPath</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//dequeue cell</span></span><br><span class="line">    <span class="built_in">UICollectionViewCell</span> *cell = [collectionView dequeueReusableCellWithReuseIdentifier:<span class="string">@"Cell"</span> forIndexPath:indexPath];</span><br><span class="line">    ...</span><br><span class="line">    <span class="comment">//switch to background thread</span></span><br><span class="line">    <span class="built_in">dispatch_async</span>(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, <span class="number">0</span>), ^&#123;</span><br><span class="line">        <span class="comment">//load image</span></span><br><span class="line">        <span class="built_in">NSInteger</span> index = indexPath.row;</span><br><span class="line">        <span class="built_in">NSString</span> *imagePath = <span class="keyword">self</span>.imagePaths[index];</span><br><span class="line">        <span class="built_in">UIImage</span> *image = [<span class="built_in">UIImage</span> imageWithContentsOfFile:imagePath];</span><br><span class="line">        <span class="comment">//redraw image using device context</span></span><br><span class="line">        <span class="built_in">UIGraphicsBeginImageContextWithOptions</span>(imageView.bounds.size, <span class="literal">YES</span>, <span class="number">0</span>);</span><br><span class="line">        [image drawInRect:imageView.bounds];</span><br><span class="line">        image = <span class="built_in">UIGraphicsGetImageFromCurrentImageContext</span>();</span><br><span class="line">        <span class="built_in">UIGraphicsEndImageContext</span>();</span><br><span class="line">        <span class="comment">//set image on main thread, but only if index still matches up</span></span><br><span class="line">        <span class="built_in">dispatch_async</span>(dispatch_get_main_queue(), ^&#123;</span><br><span class="line">            <span class="keyword">if</span> (index == cell.tag) &#123;</span><br><span class="line">                imageView.image = image;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">    &#125;);</span><br><span class="line">    <span class="keyword">return</span> cell;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<h4 id="CATiledLayer"><a href="#CATiledLayer" class="headerlink" title="CATiledLayer"></a>CATiledLayer</h4><p>如第6章“专用图层”中的例子所示，CATiledLayer可以用来异步加载和显示大型图片，而不阻塞用户输入。但是我们同样可以使用CATiledLayer在UICollectionView中为每个表格创建分离的CATiledLayer实例加载传动器图片，每个表格仅使用一个图层。<br>这样使用CATiledLayer有几个潜在的弊端：</p>
+<ul>
+<li>CATiledLayer的队列和缓存算法没有暴露出来，所以我们只能祈祷它能匹配我们的需求</li>
+<li>CATiledLayer需要我们每次重绘图片到CGContext中，即使它已经解压缩，而且和我们单元格尺寸一样（因此可以直接用作图层内容，而不需要重绘）。</li>
+</ul>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#import <span class="meta-string">"ViewController.h"</span></span></span><br><span class="line"><span class="meta">#import</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">@interface</span> <span class="title">ViewController</span>()</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">@property</span> (<span class="keyword">nonatomic</span>, <span class="keyword">copy</span>) <span class="built_in">NSArray</span> *imagePaths;</span><br><span class="line"><span class="keyword">@property</span> (<span class="keyword">nonatomic</span>, <span class="keyword">weak</span>) <span class="keyword">IBOutlet</span> <span class="built_in">UICollectionView</span> *collectionView;</span><br><span class="line"></span><br><span class="line"><span class="keyword">@end</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">@implementation</span> <span class="title">ViewController</span></span></span><br><span class="line"></span><br><span class="line">- (<span class="keyword">void</span>)viewDidLoad</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//set up data</span></span><br><span class="line">    <span class="keyword">self</span>.imagePaths = [[<span class="built_in">NSBundle</span> mainBundle] pathsForResourcesOfType:<span class="string">@"jpg"</span> inDirectory:<span class="string">@"Vacation Photos"</span>];</span><br><span class="line">    [<span class="keyword">self</span>.collectionView registerClass:[<span class="built_in">UICollectionViewCell</span> <span class="keyword">class</span>] forCellWithReuseIdentifier:<span class="string">@"Cell"</span>];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">- (<span class="built_in">NSInteger</span>)collectionView:(<span class="built_in">UICollectionView</span> *)collectionView numberOfItemsInSection:(<span class="built_in">NSInteger</span>)section</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">return</span> [<span class="keyword">self</span>.imagePaths count];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">- (<span class="built_in">UICollectionViewCell</span> *)collectionView:(<span class="built_in">UICollectionView</span> *)collectionView cellForItemAtIndexPath:(<span class="built_in">NSIndexPath</span> *)indexPath</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//dequeue cell</span></span><br><span class="line">    <span class="built_in">UICollectionViewCell</span> *cell = [collectionView dequeueReusableCellWithReuseIdentifier:<span class="string">@"Cell"</span> forIndexPath:indexPath];</span><br><span class="line">    <span class="comment">//add the tiled layer</span></span><br><span class="line">    <span class="built_in">CATiledLayer</span> *tileLayer = [cell.contentView.layer.sublayers lastObject];</span><br><span class="line">    <span class="keyword">if</span> (!tileLayer) &#123;</span><br><span class="line">        tileLayer = [<span class="built_in">CATiledLayer</span> layer];</span><br><span class="line">        tileLayer.frame = cell.bounds;</span><br><span class="line">        tileLayer.contentsScale = [<span class="built_in">UIScreen</span> mainScreen].scale;</span><br><span class="line">        tileLayer.tileSize = <span class="built_in">CGSizeMake</span>(cell.bounds.size.width * [<span class="built_in">UIScreen</span> mainScreen].scale, cell.bounds.size.height * [<span class="built_in">UIScreen</span> mainScreen].scale);</span><br><span class="line">        tileLayer.delegate = <span class="keyword">self</span>;</span><br><span class="line">        [tileLayer setValue:@(indexPath.row) forKey:<span class="string">@"index"</span>];</span><br><span class="line">        [cell.contentView.layer addSublayer:tileLayer];</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//tag the layer with the correct index and reload</span></span><br><span class="line">    tileLayer.contents = <span class="literal">nil</span>;</span><br><span class="line">    [tileLayer setValue:@(indexPath.row) forKey:<span class="string">@"index"</span>];</span><br><span class="line">    [tileLayer setNeedsDisplay];</span><br><span class="line">    <span class="keyword">return</span> cell;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">- (<span class="keyword">void</span>)drawLayer:(<span class="built_in">CATiledLayer</span> *)layer inContext:(<span class="built_in">CGContextRef</span>)ctx</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//get image index</span></span><br><span class="line">    <span class="built_in">NSInteger</span> index = [[layer valueForKey:<span class="string">@"index"</span>] integerValue];</span><br><span class="line">    <span class="comment">//load tile image</span></span><br><span class="line">    <span class="built_in">NSString</span> *imagePath = <span class="keyword">self</span>.imagePaths[index];</span><br><span class="line">    <span class="built_in">UIImage</span> *tileImage = [<span class="built_in">UIImage</span> imageWithContentsOfFile:imagePath];</span><br><span class="line">    <span class="comment">//calculate image rect</span></span><br><span class="line">    <span class="built_in">CGFloat</span> aspectRatio = tileImage.size.height / tileImage.size.width;</span><br><span class="line">    <span class="built_in">CGRect</span> imageRect = <span class="built_in">CGRectZero</span>;</span><br><span class="line">    imageRect.size.width = layer.bounds.size.width;</span><br><span class="line">    imageRect.size.height = layer.bounds.size.height * aspectRatio;</span><br><span class="line">    imageRect.origin.y = (layer.bounds.size.height - imageRect.size.height)/<span class="number">2</span>;</span><br><span class="line">    <span class="comment">//draw tile</span></span><br><span class="line">    <span class="built_in">UIGraphicsPushContext</span>(ctx);</span><br><span class="line">    [tileImage drawInRect:imageRect];</span><br><span class="line">    <span class="built_in">UIGraphicsPopContext</span>();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">@end</span></span><br></pre></td></tr></table></figure>
+
+<pre><code>需要解释几点：</code></pre><p>CATiledLayer的tileSize属性单位是像素，而不是点，所以为了保证瓦片和表格尺寸一致，需要乘以屏幕比例因子。<br>在-drawLayer:inContext:方法中，我们需要知道图层属于哪一个indexPath以加载正确的图片。这里我们利用了CALayer的KVC来存储和检索任意的值，将图层和索引打标签。</p>
+<h4 id="分辨率交换"><a href="#分辨率交换" class="headerlink" title="分辨率交换"></a>分辨率交换</h4><p>视网膜分辨率（根据苹果市场定义）代表了人的肉眼在正常视角距离能够分辨的最小像素尺寸。但是这只能应用于静态像素。当观察一个移动图片时，你的眼睛就会对细节不敏感，于是一个低分辨率的图片和视网膜质量的图片没什么区别了。+</p>
+<p>如果需要快速加载和显示移动大图，简单的办法就是欺骗人眼，在移动传送器的时候显示一个小图（或者低分辨率），然后当停止的时候再换成大图。这意味着我们需要对每张图片存储两份不同分辨率的副本，但是幸运的是，由于需要同时支持Retina和非Retina设备，本来这就是普遍要做到的。<br>如果从远程源或者用户的相册加载没有可用的低分辨率版本图片，那就可以动态将大图绘制到较小的CGContext，然后存储到某处以备复用。<br>为了做到图片交换，我们需要利用UIScrollView的一些实现UIScrollViewDelegate协议的委托方法（和其他类似于UITableView和UICollectionView基于滚动视图的控件一样）：</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">- (<span class="keyword">void</span>)scrollViewDidEndDragging:(<span class="built_in">UIScrollView</span> *)scrollView willDecelerate:(<span class="built_in">BOOL</span>)decelerate;</span><br><span class="line">- (<span class="keyword">void</span>)scrollViewDidEndDecelerating:(<span class="built_in">UIScrollView</span> *)scrollView;</span><br></pre></td></tr></table></figure>
+
+<p>你可以使用这几个方法来检测传送器是否停止滚动，然后加载高分辨率的图片。只要高分辨率图片和低分辨率图片尺寸颜色保持一致，你会很难察觉到替换的过程（确保在同一台机器使用相同的图像程序或者脚本生成这些图片）。</p>
+<h3 id="缓存"><a href="#缓存" class="headerlink" title="缓存"></a>缓存</h3><p>如果有很多张图片要显示，最好不要提前把所有都加载进来，而是应该当移出屏幕之后立刻销毁。通过选择性的缓存，你就可以避免来回滚动时图片重复性的加载了。</p>
+<h4 id="imageNamed-方法"><a href="#imageNamed-方法" class="headerlink" title="+imageNamed:方法"></a>+imageNamed:方法</h4><p>之前我们提到使用[UIImage imageNamed:]加载图片有个好处在于可以立刻解压图片而不用等到绘制的时候。但是[UIImage imageNamed:]方法有另一个非常显著的好处：它在内存中自动缓存了解压后的图片，即使你自己没有保留对它的任何引用。</p>
+<p>对于iOS应用那些主要的图片（例如图标，按钮和背景图片），使用[UIImage imageNamed:]加载图片是最简单最有效的方式。在nib文件中引用的图片同样也是这个机制，所以你很多时候都在隐式的使用它。</p>
+<p>但是[UIImage imageNamed:]并不适用任何情况。它为用户界面做了优化，但是并不是对应用程序需要显示的所有类型的图片都适用。有些时候你还是要实现自己的缓存机制，原因如下：</p>
+<ul>
+<li>[UIImage imageNamed:]方法仅仅适用于在应用程序资源束目录下的图片，但是大多数应用的许多图片都要从网络或者是用户的相机中获取，所以[UIImage imageNamed:]就没法用了。</li>
+<li>[UIImage imageNamed:]缓存用来存储应用界面的图片（按钮，背景等等）。如果对照片这种大图也用这种缓存，那么iOS系统就很可能会移除这些图片来节省内存。那么在切换页面时性能就会下降，因为这些图片都需要重新加载。对传送器的图片使用一个单独的缓存机制就可以把它和应用图片的生命周期解耦。</li>
+<li>[UIImage imageNamed:]缓存机制并不是公开的，所以你不能很好地控制它。例如，你没法做到检测图片是否在加载之前就做了缓存，不能够设置缓存大小，当图片没用的时候也不能把它从缓存中移除。</li>
+</ul>
+<h4 id="自定义缓存"><a href="#自定义缓存" class="headerlink" title="自定义缓存"></a>自定义缓存</h4><blockquote>
+<p>构建一个所谓的缓存系统非常困难。菲尔 卡尔顿曾经说过：“在计算机科学中只有两件难事：缓存和命名”。</p>
+</blockquote>
+<p>如果要写自己的图片缓存的话，那该如何实现呢？让我们来看看要涉及哪些方面：</p>
+<ul>
+<li>选择一个合适的缓存键 - 缓存键用来做图片的唯一标识。如果实时创建图片，通常不太好生成一个字符串来区分别的图片。在我们的图片传送带例子中就很简单，我们可以用图片的文件名或者表格索引。</li>
+<li>提前缓存 - 如果生成和加载数据的代价很大，你可能想当第一次需要用到的时候再去加载和缓存。提前加载的逻辑是应用内在就有的，但是在我们的例子中，这也非常好实现，因为对于一个给定的位置和滚动方向，我们就可以精确地判断出哪一张图片将会出现。</li>
+<li>缓存失效 - 如果图片文件发生了变化，怎样才能通知到缓存更新呢？这是个非常困难的问题（就像菲尔 卡尔顿提到的），但是幸运的是当从程序资源加载静态图片的时候并不需要考虑这些。对用户提供的图片来说（可能会被修改或者覆盖），一个比较好的方式就是当图片缓存的时候打上一个时间戳以便当文件更新的时候作比较。</li>
+<li>缓存回收 - 当内存不够的时候，如何判断哪些缓存需要清空呢？这就需要到你写一个合适的算法了。幸运的是，对缓存回收的问题，苹果提供了一个叫做NSCache通用的解决方案</li>
+</ul>
+<h4 id="NSCache"><a href="#NSCache" class="headerlink" title="NSCache"></a>NSCache</h4><p>NSCache和NSDictionary类似。你可以通过-setObject:forKey:和-object:forKey:方法分别来插入，检索。和字典不同的是，NSCache在系统低内存的时候自动丢弃存储的对象。</p>
+<p>NSCache用来判断何时丢弃对象的算法并没有在文档中给出，但是你可以使用-setCountLimit:方法设置缓存大小，以及-setObject:forKey:cost:来对每个存储的对象指定消耗的值来提供一些暗示。</p>
+<p>指定消耗数值可以用来指定相对的重建成本。如果对大图指定一个大的消耗值，<strong>那么缓存就知道这些物体的存储更加昂贵，于是当有大的性能问题的时候才会丢弃这些物体。</strong>你也可以用-setTotalCostLimit:方法来指定全体缓存的尺寸。</p>
+<p>NSCache是一个普遍的缓存解决方案，我们创建一个比传送器案例更好的自定义的缓存类。（例如，我们可以基于不同的缓存图片索引和当前中间索引来判断哪些图片需要首先被释放）。但是NSCache对我们当前的缓存需求来说已经足够了；没必要过早做优化。</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="meta">#import <span class="meta-string">"ViewController.h"</span></span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">@interface</span> <span class="title">ViewController</span>()</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">@property</span> (<span class="keyword">nonatomic</span>, <span class="keyword">copy</span>) <span class="built_in">NSArray</span> *imagePaths;</span><br><span class="line"><span class="keyword">@property</span> (<span class="keyword">nonatomic</span>, <span class="keyword">weak</span>) <span class="keyword">IBOutlet</span> <span class="built_in">UICollectionView</span> *collectionView;</span><br><span class="line"></span><br><span class="line"><span class="keyword">@end</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">@implementation</span> <span class="title">ViewController</span></span></span><br><span class="line"></span><br><span class="line">- (<span class="keyword">void</span>)viewDidLoad</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//set up data</span></span><br><span class="line">    <span class="keyword">self</span>.imagePaths = [[<span class="built_in">NSBundle</span> mainBundle] pathsForResourcesOfType:<span class="string">@"png"</span> inDirectory:<span class="string">@"Vacation Photos"</span>];</span><br><span class="line">    <span class="comment">//register cell class</span></span><br><span class="line">    [<span class="keyword">self</span>.collectionView registerClass:[<span class="built_in">UICollectionViewCell</span> <span class="keyword">class</span>] forCellWithReuseIdentifier:<span class="string">@"Cell"</span>];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">- (<span class="built_in">NSInteger</span>)collectionView:(<span class="built_in">UICollectionView</span> *)collectionView numberOfItemsInSection:(<span class="built_in">NSInteger</span>)section</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">return</span> [<span class="keyword">self</span>.imagePaths count];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">- (<span class="built_in">UIImage</span> *)loadImageAtIndex:(<span class="built_in">NSUInteger</span>)index</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//set up cache</span></span><br><span class="line">    <span class="keyword">static</span> <span class="built_in">NSCache</span> *cache = <span class="literal">nil</span>;</span><br><span class="line">    <span class="keyword">if</span> (!cache) &#123;</span><br><span class="line">        cache = [[<span class="built_in">NSCache</span> alloc] init];</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//if already cached, return immediately</span></span><br><span class="line">    <span class="built_in">UIImage</span> *image = [cache objectForKey:@(index)];</span><br><span class="line">    <span class="keyword">if</span> (image) &#123;</span><br><span class="line">        <span class="comment">//如果为NSNull 这意味着，会有代码对其进行赋值，所以这里赋值一个nil,即可。不用担心，image 的赋值不会出现问题。</span></span><br><span class="line">        <span class="keyword">return</span> [image isKindOfClass:[<span class="built_in">NSNull</span> <span class="keyword">class</span>]]? <span class="literal">nil</span>: image;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//设定为NSNull 后面的代码会在随后的执行中进行赋值</span></span><br><span class="line">    <span class="comment">//set placeholder to avoid reloading image multiple times</span></span><br><span class="line">    [cache setObject:[<span class="built_in">NSNull</span> null] forKey:@(index)];</span><br><span class="line">    <span class="comment">//switch to background thread</span></span><br><span class="line">    <span class="built_in">dispatch_async</span>( dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, <span class="number">0</span>), ^&#123;</span><br><span class="line">        <span class="comment">//load image</span></span><br><span class="line">        <span class="built_in">NSString</span> *imagePath = <span class="keyword">self</span>.imagePaths[index];</span><br><span class="line">        <span class="built_in">UIImage</span> *image = [<span class="built_in">UIImage</span> imageWithContentsOfFile:imagePath];</span><br><span class="line">        <span class="comment">//redraw image using device context</span></span><br><span class="line">        <span class="built_in">UIGraphicsBeginImageContextWithOptions</span>(image.size, <span class="literal">YES</span>, <span class="number">0</span>);</span><br><span class="line">        [image drawAtPoint:<span class="built_in">CGPointZero</span>];</span><br><span class="line">        image = <span class="built_in">UIGraphicsGetImageFromCurrentImageContext</span>();</span><br><span class="line">        <span class="built_in">UIGraphicsEndImageContext</span>();</span><br><span class="line">        <span class="comment">//set image for correct image view</span></span><br><span class="line">        <span class="built_in">dispatch_async</span>(dispatch_get_main_queue(), ^&#123; <span class="comment">//cache the image</span></span><br><span class="line">            [cache setObject:image forKey:@(index)];</span><br><span class="line">            <span class="comment">//display the image</span></span><br><span class="line">            <span class="built_in">NSIndexPath</span> *indexPath = [<span class="built_in">NSIndexPath</span> indexPathForItem: index inSection:<span class="number">0</span>]; <span class="built_in">UICollectionViewCell</span> *cell = [<span class="keyword">self</span>.collectionView cellForItemAtIndexPath:indexPath];</span><br><span class="line">            <span class="built_in">UIImageView</span> *imageView = [cell.contentView.subviews lastObject];</span><br><span class="line">            imageView.image = image;</span><br><span class="line">        &#125;);</span><br><span class="line">    &#125;);</span><br><span class="line">    <span class="comment">//not loaded yet</span></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">- (<span class="built_in">UICollectionViewCell</span> *)collectionView:(<span class="built_in">UICollectionView</span> *)collectionView cellForItemAtIndexPath:(<span class="built_in">NSIndexPath</span> *)indexPath</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//dequeue cell</span></span><br><span class="line">    <span class="built_in">UICollectionViewCell</span> *cell = [collectionView dequeueReusableCellWithReuseIdentifier:<span class="string">@"Cell"</span> forIndexPath:indexPath];</span><br><span class="line">    <span class="comment">//add image view</span></span><br><span class="line">    <span class="built_in">UIImageView</span> *imageView = [cell.contentView.subviews lastObject];</span><br><span class="line">    <span class="keyword">if</span> (!imageView) &#123;</span><br><span class="line">        imageView = [[<span class="built_in">UIImageView</span> alloc] initWithFrame:cell.contentView.bounds];</span><br><span class="line">        imageView.contentMode = <span class="built_in">UIViewContentModeScaleAspectFit</span>;</span><br><span class="line">        [cell.contentView addSubview:imageView];</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//set or load image for this index</span></span><br><span class="line">    imageView.image = [<span class="keyword">self</span> loadImageAtIndex:indexPath.item];</span><br><span class="line">    <span class="comment">//preload image for previous and next index</span></span><br><span class="line">    <span class="keyword">if</span> (indexPath.item &lt; [<span class="keyword">self</span>.imagePaths count] - <span class="number">1</span>) &#123;</span><br><span class="line">        [<span class="keyword">self</span> loadImageAtIndex:indexPath.item + <span class="number">1</span>]; &#125;</span><br><span class="line">    <span class="keyword">if</span> (indexPath.item &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        [<span class="keyword">self</span> loadImageAtIndex:indexPath.item - <span class="number">1</span>]; &#125;</span><br><span class="line">    <span class="keyword">return</span> cell;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">@end</span></span><br></pre></td></tr></table></figure>
+
+<p>果然效果更好了！当滚动的时候虽然还有一些图片进入的延迟，但是已经非常罕见了。缓存意味着我们做了更少的加载。这里提前加载逻辑非常粗暴，其实可以把滑动速度和方向也考虑进来，但这已经比之前没做缓存的版本好很多了。</p>
+<h2 id="图层性能"><a href="#图层性能" class="headerlink" title="图层性能"></a>图层性能</h2><h3 id="隐式绘制"><a href="#隐式绘制" class="headerlink" title="隐式绘制"></a>隐式绘制</h3><p><strong>寄宿图可以通过Core Graphics直接绘制</strong>，<strong>也可以直接载入一个图片文件并赋值 给 contents 属性</strong>，<strong>或事先绘制一个屏幕之外的 CGContext 上下文</strong>。在之前的两 章中我们讨论了这些场景下的优化。但是除了常见的显式创建寄宿图，你也可以通 过以下三种方式创建隐式的：1，使用特性的图层属性。2，特定的视图。3，特定 的图层子类。</p>
+<h3 id="文本"><a href="#文本" class="headerlink" title="文本"></a>文本</h3><p>都是直接将文本绘制在图层的寄宿图中。事实上这 两种方式用了完全不同的渲染方式：在iOS 6及之前， UILabel 用WebKit的HTML 渲染引擎来绘制文本，而 CATextLayer 用的是Core Text.后者渲染更迅速，所以 在所有需要绘制大量文本的情形下都优先使用它吧。但是这两种方法都用了软件的 方式绘制，因此他们实际上要比硬件加速合成方式要慢。(iOS Text Kit)</p>
+<p>CATextLayer和UILabel不论如何，尽可能地避免改变那些包含文本的视图的frame，因为这样做的话文 本就需要重绘。例如，如果你想在图层的角落里显示一段静态的文本，但是这个图 层经常改动，你就应该把文本放在一个子图层中。</p>
+<h3 id="光栅化"><a href="#光栅化" class="headerlink" title="光栅化"></a>光栅化</h3><p>在第四章『视觉效果』中我们提到了 CALayer 的 shouldRasterize 属性，它 可以解决重叠透明图层的混合失灵问题。同样在第12章『速度的曲调』中，它也是 作为绘制复杂图层树结构的优化方法。</p>
+<p>启用 shouldRasterize 属性会将图层绘制到一个屏幕之外的图像。然后这个图 像将会被缓存起来并绘制到实际图层的 contents 和子图层。如果有很多的子图层 或者有复杂的效果应用，这样做就会比重绘所有事务的所有帧划得来得多。但是光 栅化原始图像需要时间，而且还会消耗额外的内存。（shouldRasterize，如果视图加载内容经常变化，会大量消耗内存和CPU 导致掉帧）</p>
+<p>当我们使用得当时，光栅化可以提供很大的性能优势（如你在第12章所见），但 是一定要避免作用在内容不断变动的图层上，否则它缓存方面的好处就会消失，而 且会让性能变的更糟。</p>
+<h3 id="离屏渲染"><a href="#离屏渲染" class="headerlink" title="离屏渲染"></a>离屏渲染</h3><p>当图层属性的混合体被指定为在未预合成之前不能直接在屏幕中绘制时，屏幕外 渲染就被唤起了。屏幕外渲染并不意味着软件绘制，<strong>但是它意味着图层必须在被显 示之前在一个屏幕外上下文中被渲染（不论CPU还是GPU）</strong>。图层的以下属性将会 触发屏幕外绘制：</p>
+<ul>
+<li>圆角</li>
+<li>图层蒙版</li>
+<li>阴影</li>
+</ul>
+<p>屏幕外渲染和我们启用光栅化时相似，除了它并没有像光栅化图层那么消耗大， <strong>子图层并没有被影响到，而且结果也没有被缓存</strong>，所以不会有长期的内存占用。但 是，如果太多图层在屏幕外渲染依然会影响到性能。</p>
+<p>有时候我们可以把那些需要屏幕外绘制的图层开启光栅化以作为一个优化方式， 前提是这些图层并不会被频繁地重绘。</p>
+<p>对于那些需要动画而且要在屏幕外渲染的图层来说，你可以用 CAShapeLayer ，contentsCenter，shadowPath 较少地影响到性能。</p>
+<h4 id="CAShapeLayer"><a href="#CAShapeLayer" class="headerlink" title="CAShapeLayer"></a>CAShapeLayer</h4><pre><code>cornerRadius和maskToBounds独立作用的时候都不会有太大的性能问题，但是当他俩结合在一起，就触发了屏幕外渲染。有时候你想显示圆角并沿着图层裁切子图层的时候，你可能会发现你并不需要沿着圆角裁切，这个情况下用CAShapeLayer就可以避免这个问题了。2
+
+你想要的只是圆角且沿着矩形边界裁切，同时还不希望引起性能问题。其实你可以用现成的UIBezierPath的构造器+bezierPathWithRoundedRect:cornerRadius:（见清单15.1）.这样做并不会比直接用cornerRadius更快，但是它避免了性能问题。</code></pre><h3 id="混合和过度绘制"><a href="#混合和过度绘制" class="headerlink" title="混合和过度绘制"></a>混合和过度绘制</h3><pre><code>在第12章有提到，GPU每一帧可以绘制的像素有一个最大限制（就是所谓的fill rate），这个情况下可以轻易地绘制整个屏幕的所有像素。但是如果由于重叠图层的关系需要不停地重绘同一区域的话，掉帧就可能发生了。
+**GPU会放弃绘制那些完全被其他图层遮挡的像素**，但是要计算出一个图层是否被遮挡也是相当复杂并且会消耗处理器资源。同样，合并不同图层的透明重叠像素（即混合）消耗的资源也是相当客观的。所以为了加速处理进程，不到必须时刻不要使用透明图层。任何情况下，你应该这样做：
+- 给视图的backgroundColor属性设置一个固定的，不透明的颜色
+- 设置opaque属性为YES
+这样做减少了混合行为（因为编译器知道在图层之后的东西都不会对最终的像素颜色产生影响）并且计算得到了加速，避免了过度绘制行为因为Core Animation可以舍弃所有被完全遮盖住的图层，而不用每个像素都去计算一遍。
+如果用到了图像，尽量避免透明除非非常必要。如果图像要显示在一个固定的背景颜色或是固定的背景图之前，你没必要相对前景移动，你只需要预填充背景图片就可以避免运行时混色了。
+如果是文本的话，一个白色背景的UILabel（或者其他颜色）会比透明背景要更高效。
+最后，明智地使用shouldRasterize属性，可以将一个固定的图层体系折叠成单张图片，这样就不需要每一帧重新合成了，也就不会有因为子图层之间的混合和过度绘制的性能问题了。</code></pre><h3 id="减少图层数量"><a href="#减少图层数量" class="headerlink" title="减少图层数量"></a>减少图层数量</h3>
+    </article>
+    <!-- license  -->
+    
+        <div class="license-wrapper">
+            <p>Author：<a href="http://yoursite.com">junyixie</a>
+            <p>原文链接：<a href="http://yoursite.com/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/">http://yoursite.com/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/</a>
+            <p>发表日期：<a href="http://yoursite.com/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/">January 24th 2017, 7:27:06 pm</a>
+            <p>更新日期：<a href="http://yoursite.com/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/">May 26th 2018, 7:27:59 pm</a>
+            <p>版权声明：本文采用<a rel="license noopener" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>进行许可</p>
+        </div>
+    
+    <!-- paginator  -->
+    <ul class="post-paginator">
+        <li class="next">
+            
+                <div class="nextSlogan">Next Post</div>
+                <a href= "/2017/02/01/Objective-C-weak-%E5%85%B3%E9%94%AE%E5%AD%97-%E5%AE%9E%E7%8E%B0-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" title= "Objective-C weak 关键字 实现 源码分析">
+                    <div class="nextTitle">Objective-C weak 关键字 实现 源码分析</div>
+                </a>
+            
+        </li>
+        <li class="previous">
+            
+                <div class="prevSlogan">Previous Post</div>
+                <a href= "/2017/01/15/Aspects-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" title= "Aspects 源码分析">
+                    <div class="prevTitle">Aspects 源码分析</div>
+                </a>
+            
+        </li>
+    </ul>
+    <!-- 评论插件 -->
+    <!-- 来必力City版安装代码 -->
+
+<!-- City版安装代码已完成 -->
+    
+    
+    <!-- gitalk评论 -->
+
+    <!-- utteranc评论 -->
+
+    <!-- partial('_partial/comment/changyan') -->
+    <!--PC版-->
+
+
+    
+    
+
+    <!-- 评论 -->
+</main>
+            <!-- profile -->
+            
+        </div>
+        <footer class="footer footer-unloaded">
+    <!-- social  -->
+    
+    <div class="social">
+        
+    
+        
+            
+                <a href="mailto:xie.junyi@outlook.com" target="_blank" rel="noopener" class="iconfont-archer email" title=email ></a>
+            
+        
+    
+        
+            
+                <a href="//github.com/junyixie" class="iconfont-archer github" target="_blank" title=github></a>
+            
+        
+    
+        
+            
+                <span class="iconfont-archer wechat" title=wechat>
+                  
+                  <img class="profile-qr" src="/assets/example_qr.png" />
+                </span>
+            
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+
+    </div>
+    
+    <!-- powered by Hexo  -->
+    <div class="copyright">
+        <span id="hexo-power">Powered by <a href="https://hexo.io/" target="_blank">Hexo</a></span><span class="iconfont-archer power">&#xe635;</span><span id="theme-info">theme <a href="https://github.com/fi3ework/hexo-theme-archer" target="_blank">Archer</a></span>
+    </div>
+    <!-- 不蒜子  -->
+    
+    <div class="busuanzi-container">
+    
+     
+    <span id="busuanzi_container_site_pv">PV: <span id="busuanzi_value_site_pv"></span> :)</span>
+    
+    </div>
+    
+</footer>
+    </div>
+    <!-- toc -->
+    
+    <div class="toc-wrapper" style=
+    
+
+
+
+
+
+
+
+top:50vh;
+
+    >
+        <div class="toc-catalog">
+            <span class="iconfont-archer catalog-icon">&#xe613;</span><span>CATALOG</span>
+        </div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#高效绘图"><span class="toc-number">1.</span> <span class="toc-text">高效绘图</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#一些关键词"><span class="toc-number">1.1.</span> <span class="toc-text">一些关键词</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#软件绘图"><span class="toc-number">1.2.</span> <span class="toc-text">软件绘图</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#矢量图形"><span class="toc-number">1.3.</span> <span class="toc-text">矢量图形</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#脏矩形"><span class="toc-number">1.4.</span> <span class="toc-text">脏矩形</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#异步绘制"><span class="toc-number">1.5.</span> <span class="toc-text">异步绘制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#图像IO"><span class="toc-number">2.</span> <span class="toc-text">图像IO</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#加载和潜伏"><span class="toc-number">2.1.</span> <span class="toc-text">加载和潜伏</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#线程加载"><span class="toc-number">2.1.1.</span> <span class="toc-text">线程加载</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#延迟解压"><span class="toc-number">2.1.2.</span> <span class="toc-text">延迟解压</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#CATiledLayer"><span class="toc-number">2.1.3.</span> <span class="toc-text">CATiledLayer</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#分辨率交换"><span class="toc-number">2.1.4.</span> <span class="toc-text">分辨率交换</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#缓存"><span class="toc-number">2.2.</span> <span class="toc-text">缓存</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#imageNamed-方法"><span class="toc-number">2.2.1.</span> <span class="toc-text">+imageNamed:方法</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#自定义缓存"><span class="toc-number">2.2.2.</span> <span class="toc-text">自定义缓存</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#NSCache"><span class="toc-number">2.2.3.</span> <span class="toc-text">NSCache</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#图层性能"><span class="toc-number">3.</span> <span class="toc-text">图层性能</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#隐式绘制"><span class="toc-number">3.1.</span> <span class="toc-text">隐式绘制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#文本"><span class="toc-number">3.2.</span> <span class="toc-text">文本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#光栅化"><span class="toc-number">3.3.</span> <span class="toc-text">光栅化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#离屏渲染"><span class="toc-number">3.4.</span> <span class="toc-text">离屏渲染</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CAShapeLayer"><span class="toc-number">3.4.1.</span> <span class="toc-text">CAShapeLayer</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#混合和过度绘制"><span class="toc-number">3.5.</span> <span class="toc-text">混合和过度绘制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#减少图层数量"><span class="toc-number">3.6.</span> <span class="toc-text">减少图层数量</span></a></li></ol></li></ol>
+    </div>
+    
+    <div class="back-top iconfont-archer">&#xe639;</div>
+    <div class="sidebar sidebar-hide">
+    <ul class="sidebar-tabs sidebar-tabs-active-0">
+        <li class="sidebar-tab-archives"><span class="iconfont-archer">&#xe67d;</span><span class="tab-name">Archive</span></li>
+        <li class="sidebar-tab-tags"><span class="iconfont-archer">&#xe61b;</span><span class="tab-name">Tag</span></li>
+        <li class="sidebar-tab-categories"><span class="iconfont-archer">&#xe666;</span><span class="tab-name">Cate</span></li>
+    </ul>
+    <div class="sidebar-content sidebar-content-show-archive">
+          <div class="sidebar-panel-archives">
+    <!-- 在ejs中将archive按照时间排序 -->
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <div class="total-and-search">
+        <div class="total-archive">
+        Total : 29
+        </div>
+        <!-- search  -->
+        
+    </div>
+    
+    <div class="post-archive">
+    
+    
+    
+    
+    <div class="archive-year"> 2020 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2020/10/05/cpythonstrip/" >cpython3.8瘦身到0.95mb</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2020/04/10/objcblockimp/" >imp_implementationWithBlock 的内部实现 trampoline</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/08</span><a class="archive-post-title" href= "/2020/04/08/lliread/" >lli源码阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/01</span><a class="archive-post-title" href= "/2020/04/01/MachOObjC/" >MachO（一） ObjC类结构的加载</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/25</span><a class="archive-post-title" href= "/2020/03/25/DobbyRead/" >Dobby源码学习（一） Inline Hook</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/19</span><a class="archive-post-title" href= "/2020/03/19/cocoapods-new-feature/" >cocoapods 新feature 开发 Example, On Demand Resource</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/04</span><a class="archive-post-title" href= "/2020/03/04/lazybind/" >dyld(2) lazy bind 和 dyld_stub_binder</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/03</span><a class="archive-post-title" href= "/2020/03/03/macholinkedit/" >dyld(1) MachO Linkedit 段</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/19</span><a class="archive-post-title" href= "/2020/02/19/crashruntimeinfo/" >Block ABI 文档阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/12</span><a class="archive-post-title" href= "/2020/02/12/iosdevdebug/" >iOS开发必备的问题定位调试技巧</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2019 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">11/26</span><a class="archive-post-title" href= "/2019/11/26/projectpodenv/" >CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2019/10/05/cocoapodsdev/" >CocoaPods插件开发原理(一) CocoaPods做了啥</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/28</span><a class="archive-post-title" href= "/2019/09/28/CrashMonitorSystem/" >崩溃捕获系统的原理（一）异常信号</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2018 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/30</span><a class="archive-post-title" href= "/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" >DWARF和符号化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/16</span><a class="archive-post-title" href= "/2018/09/16/CrashSymbolicateSystemDesign/" >APM Crash系统</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">06/13</span><a class="archive-post-title" href= "/2018/06/13/libmalloc/" >libmalloc "malloc" 探究</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/13</span><a class="archive-post-title" href= "/2018/04/13/dependency/" >关于架构和编码的思考</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2018/04/10/iosoom/" >iOS OOM</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2018/01/15/sharedlibraryandpic/" >fishhook与共享库和PIC</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2017 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/24</span><a class="archive-post-title" href= "/2017/12/24/In-depthUnderStandingOfThreadSafety/" >理解线程安全</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/04</span><a class="archive-post-title" href= "/2017/12/04/safeSwizzleRSSwizzleAnalyze/" >Method Swizzling 的正确途径</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/27</span><a class="archive-post-title" href= "/2017/10/27/dyld3withappstart/" >链接和App启动速度优化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/26</span><a class="archive-post-title" href= "/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/" >理解HTTPS</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">05/01</span><a class="archive-post-title" href= "/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/" >Objective-C 深入理解中的消息机制和方法调用</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/20</span><a class="archive-post-title" href= "/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" >Cocoa 深入理解KVO</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/06</span><a class="archive-post-title" href= "/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/" >理解 Objc Runtime</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/01</span><a class="archive-post-title" href= "/2017/02/01/Objective-C-weak-%E5%85%B3%E9%94%AE%E5%AD%97-%E5%AE%9E%E7%8E%B0-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Objective-C weak 关键字 实现 源码分析</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/24</span><a class="archive-post-title" href= "/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/" >iOS Core Animation性能调优 笔记</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2017/01/15/Aspects-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Aspects 源码分析</a>
+        </li>
+    
+    </div>
+  </div>
+        <div class="sidebar-panel-tags">
+    <div class="sidebar-tags-name">
+    
+    </div>
+    <div class="iconfont-archer sidebar-tags-empty">&#xe678;</div>
+    <div class="tag-load-fail" style="display: none; color: #ccc; font-size: 0.6rem;">
+    缺失模块。<br/>
+    1、请确保node版本大于6.2<br/>
+    2、在博客根目录（注意不是archer根目录）执行以下命令：<br/>
+    <span style="color: #f75357; font-size: 1rem; line-height: 2rem;">npm i hexo-generator-json-content --save</span><br/>
+    3、在根目录_config.yml里添加配置：
+    <pre style="color: #787878; font-size: 0.6rem;">
+jsonContent:
+  meta: false
+  pages: false
+  posts:
+    title: true
+    date: true
+    path: true
+    text: false
+    raw: false
+    content: false
+    slug: false
+    updated: false
+    comments: false
+    link: false
+    permalink: false
+    excerpt: false
+    categories: true
+    tags: true</pre>
+    </div> 
+    <div class="sidebar-tags-list"></div>
+</div>
+        <div class="sidebar-panel-categories">
+    <div class="sidebar-categories-name">
+    
+        <span class="sidebar-category-name" data-categories="iOS"><span class="iconfont-archer">&#xe60a;</span>iOS</span>
+    
+        <span class="sidebar-category-name" data-categories="源码分析"><span class="iconfont-archer">&#xe60a;</span>源码分析</span>
+    
+        <span class="sidebar-category-name" data-categories="APM"><span class="iconfont-archer">&#xe60a;</span>APM</span>
+    
+        <span class="sidebar-category-name" data-categories="设计架构"><span class="iconfont-archer">&#xe60a;</span>设计架构</span>
+    
+        <span class="sidebar-category-name" data-categories="研发流程"><span class="iconfont-archer">&#xe60a;</span>研发流程</span>
+    
+        <span class="sidebar-category-name" data-categories="Hook"><span class="iconfont-archer">&#xe60a;</span>Hook</span>
+    
+    </div>
+    <div class="iconfont-archer sidebar-categories-empty">&#xe678;</div>
+    <div class="sidebar-categories-list"></div>
+</div>
+    </div>
+</div> 
+    <script>
+    var siteMeta = {
+        root: "/",
+        author: "junyixie"
+    }
+</script>
+    <!-- CDN failover -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+    <script type="text/javascript">
+        if (typeof window.$ === 'undefined')
+        {
+            console.warn('jquery load from jsdelivr failed, will load local script')
+            document.write('<script src="/lib/jquery.min.js">\x3C/script>')
+        }
+    </script>
+    <script src="/scripts/main.js"></script>
+    <!-- algolia -->
+    
+    <!-- busuanzi  -->
+    
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    
+    <!-- CNZZ  -->
+    
+    </div>
+    <!-- async load share.js -->
+    
+        <script src="/scripts/share.js" async></script>    
+     
+    </body>
+</html>
+
+

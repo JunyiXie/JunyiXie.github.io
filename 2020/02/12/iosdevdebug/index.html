@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+    <!-- title -->
+
+
+
+
+<!-- keywords -->
+
+
+
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" >
+    <meta name="author" content="junyixie">
+    <meta name="renderer" content="webkit">
+    <meta name="copyright" content="junyixie">
+    
+    <meta name="keywords" content="hexo,hexo-theme,hexo-blog,blog,谢俊逸">
+    
+    <meta name="description" content="">
+    <meta name="description" content="好久没写科普文.. 在iOS开发的过程中难免遇到各种问题，本文将结合作者这么多年（其实也没几年）的擦屁股和挖坑经验，总结一套调试方法，让你在遇到问题时不盲目，有切入点，可以自己一步一步分析去解决问题。  逻辑问题调试 崩溃问题调试 内存问题调试  逻辑问题调试在阅读一份完全不熟悉的代码时，不知道从何入手，如何找到自己感兴趣的部分。这里介绍几个手段定位到你感兴趣的点： 关键字搜索ripgrep ht">
+<meta property="og:type" content="article">
+<meta property="og:title" content="iOS开发必备的问题定位调试技巧">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;12&#x2F;iosdevdebug&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="好久没写科普文.. 在iOS开发的过程中难免遇到各种问题，本文将结合作者这么多年（其实也没几年）的擦屁股和挖坑经验，总结一套调试方法，让你在遇到问题时不盲目，有切入点，可以自己一步一步分析去解决问题。  逻辑问题调试 崩溃问题调试 内存问题调试  逻辑问题调试在阅读一份完全不熟悉的代码时，不知道从何入手，如何找到自己感兴趣的部分。这里介绍几个手段定位到你感兴趣的点： 关键字搜索ripgrep ht">
+<meta property="og:locale" content="en">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;12&#x2F;iosdevdebug&#x2F;ld_breakpoint.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;12&#x2F;iosdevdebug&#x2F;ld_callstack.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;12&#x2F;iosdevdebug&#x2F;view_iphone_crash.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;12&#x2F;iosdevdebug&#x2F;crashlog.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;12&#x2F;iosdevdebug&#x2F;open_exception_breakpoint.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;12&#x2F;iosdevdebug&#x2F;exception_crash.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;12&#x2F;iosdevdebug&#x2F;memory_graph_btn.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;12&#x2F;iosdevdebug&#x2F;memory_graph.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;12&#x2F;iosdevdebug&#x2F;memorytools.png">
+<meta property="og:updated_time" content="2020-02-12T09:53:51.153Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;12&#x2F;iosdevdebug&#x2F;ld_breakpoint.png">
+    <meta http-equiv="Cache-control" content="no-cache">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    
+    <title>iOS开发必备的问题定位调试技巧 · xiejunyi,谢俊逸</title>
+    <style type="text/css">
+    @font-face {
+        font-family: 'Oswald-Regular';
+        src: url("/font/Oswald-Regular.ttf");
+    }
+
+    body {
+        margin: 0;
+    }
+
+    header,
+    footer,
+    .back-top,
+    .sidebar,
+    .container,
+    .site-intro-meta,
+    .toc-wrapper {
+        display: none;
+    }
+
+    .site-intro {
+        position: relative;
+        z-index: 3;
+        width: 100%;
+        /* height: 50vh; */
+        overflow: hidden;
+    }
+
+    .site-intro-placeholder {
+        position: absolute;
+        z-index: -2;
+        top: 0;
+        left: 0;
+        width: calc(100% + 300px);
+        height: 100%;
+        background: repeating-linear-gradient(-45deg, #444 0, #444 80px, #333 80px, #333 160px);
+        background-position: center center;
+        transform: translate3d(-226px, 0, 0);
+        animation: gradient-move 2.5s ease-out 0s infinite;
+    }
+
+    @keyframes gradient-move {
+        0% {
+            transform: translate3d(-226px, 0, 0);
+        }
+        100% {
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+</style>
+
+    <link rel="preload" href= "/css/style.css?v=20180824" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    <link rel="stylesheet" href= "/css/mobile.css?v=20180824" media="(max-width: 980px)">
+    
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    
+    <!-- /*! loadCSS. [c]2017 Filament Group, Inc. MIT License */
+/* This file is meant as a standalone workflow for
+- testing support for link[rel=preload]
+- enabling async CSS loading in browsers that do not support rel=preload
+- applying rel preload css once loaded, whether supported or not.
+*/ -->
+<script>
+(function( w ){
+	"use strict";
+	// rel=preload support test
+	if( !w.loadCSS ){
+		w.loadCSS = function(){};
+	}
+	// define on the loadCSS obj
+	var rp = loadCSS.relpreload = {};
+	// rel=preload feature support test
+	// runs once and returns a function for compat purposes
+	rp.support = (function(){
+		var ret;
+		try {
+			ret = w.document.createElement( "link" ).relList.supports( "preload" );
+		} catch (e) {
+			ret = false;
+		}
+		return function(){
+			return ret;
+		};
+	})();
+
+	// if preload isn't supported, get an asynchronous load by using a non-matching media attribute
+	// then change that media back to its intended value on load
+	rp.bindMediaToggle = function( link ){
+		// remember existing media attr for ultimate state, or default to 'all'
+		var finalMedia = link.media || "all";
+
+		function enableStylesheet(){
+			link.media = finalMedia;
+		}
+
+		// bind load handlers to enable media
+		if( link.addEventListener ){
+			link.addEventListener( "load", enableStylesheet );
+		} else if( link.attachEvent ){
+			link.attachEvent( "onload", enableStylesheet );
+		}
+
+		// Set rel and non-applicable media type to start an async request
+		// note: timeout allows this to happen async to let rendering continue in IE
+		setTimeout(function(){
+			link.rel = "stylesheet";
+			link.media = "only x";
+		});
+		// also enable media after 3 seconds,
+		// which will catch very old browsers (android 2.x, old firefox) that don't support onload on link
+		setTimeout( enableStylesheet, 3000 );
+	};
+
+	// loop through link elements in DOM
+	rp.poly = function(){
+		// double check this to prevent external calls from running
+		if( rp.support() ){
+			return;
+		}
+		var links = w.document.getElementsByTagName( "link" );
+		for( var i = 0; i < links.length; i++ ){
+			var link = links[ i ];
+			// qualify links to those with rel=preload and as=style attrs
+			if( link.rel === "preload" && link.getAttribute( "as" ) === "style" && !link.getAttribute( "data-loadcss" ) ){
+				// prevent rerunning on link
+				link.setAttribute( "data-loadcss", true );
+				// bind listeners to toggle media back
+				rp.bindMediaToggle( link );
+			}
+		}
+	};
+
+	// if unsupported, run the polyfill
+	if( !rp.support() ){
+		// run once at least
+		rp.poly();
+
+		// rerun poly on an interval until onload
+		var run = w.setInterval( rp.poly, 500 );
+		if( w.addEventListener ){
+			w.addEventListener( "load", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		} else if( w.attachEvent ){
+			w.attachEvent( "onload", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		}
+	}
+
+
+	// commonjs
+	if( typeof exports !== "undefined" ){
+		exports.loadCSS = loadCSS;
+	}
+	else {
+		w.loadCSS = loadCSS;
+	}
+}( typeof global !== "undefined" ? global : this ) );
+</script>
+
+    <link rel="icon" href= "/assets/favicon.ico" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js" as="script" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js" as="script" />
+    <link rel="preload" href="/scripts/main.js" as="script" />
+    <link rel="preload" as="font" href="/font/Oswald-Regular.ttf" crossorigin>
+    <link rel="preload" as="font" href="https://at.alicdn.com/t/font_327081_1dta1rlogw17zaor.woff" crossorigin>
+    
+    <!-- fancybox -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.js" defer></script>
+    <!-- 百度统计  -->
+    
+    <!-- 谷歌统计  -->
+    
+</head>
+
+    
+        <body class="post-body">
+    
+    
+<header class="header">
+
+    <div class="read-progress"></div>
+    <div class="header-sidebar-menu">&#xe775;</div>
+    <!-- post页的toggle banner  -->
+    
+    <div class="banner">
+            <div class="blog-title">
+                <a href="/" >xiejunyi&#39;s blog.</a>
+            </div>
+            <div class="post-title">
+                <a href="#" class="post-name">iOS开发必备的问题定位调试技巧</a>
+            </div>
+    </div>
+    
+    <a class="home-link" href=/>xiejunyi's blog.</a>
+</header>
+    <div class="wrapper">
+        <div class="site-intro" style="
+
+
+
+
+
+
+
+height:50vh;
+">
+    
+    <!-- 主页  -->
+    
+    
+    <!-- 404页  -->
+            
+    <div class="site-intro-placeholder"></div>
+    <div class="site-intro-img" style="background-image: url(/intro/post-bg.jpg)"></div>
+    <div class="site-intro-meta">
+        <!-- 标题  -->
+        <h1 class="intro-title">
+            <!-- 主页  -->
+            
+            iOS开发必备的问题定位调试技巧
+            <!-- 404 -->
+            
+        </h1>
+        <!-- 副标题 -->
+        <p class="intro-subtitle">
+            <!-- 主页副标题  -->
+            
+            
+            <!-- 404 -->
+            
+        </p>
+        <!-- 文章页meta -->
+        
+            <div class="post-intros">
+                <!-- 文章页标签  -->
+                
+                
+                    <div class="post-intro-read">
+                        <span>Word count: <span class="post-count word-count">1.5k</span>Reading time: <span class="post-count reading-time">6 min</span></span>
+                    </div>
+                
+                <div class="post-intro-meta">
+                    <span class="post-intro-calander iconfont-archer">&#xe676;</span>
+                    <span class="post-intro-time">2020/02/12</span>
+                    
+                    <span id="busuanzi_container_page_pv" class="busuanzi-pv">
+                        <span class="iconfont-archer">&#xe602;</span>
+                        <span id="busuanzi_value_page_pv"></span>
+                    </span>
+                    
+                    <span class="shareWrapper">
+                        <span class="iconfont-archer shareIcon">&#xe71d;</span>
+                        <span class="shareText">Share</span>
+                        <ul class="shareList">
+                            <li class="iconfont-archer share-qr" data-type="qr">&#xe75b;
+                                <div class="share-qrcode"></div>
+                            </li>
+                            <li class="iconfont-archer" data-type="weibo">&#xe619;</li>
+                            <li class="iconfont-archer" data-type="qzone">&#xe62e;</li>
+                            <li class="iconfont-archer" data-type="twitter">&#xe634;</li>
+                            <li class="iconfont-archer" data-type="facebook">&#xe67a;</li>
+                        </ul>
+                    </span>
+                </div>
+            </div>
+        
+    </div>
+</div>
+        <script>
+ 
+  // get user agent
+  var browser = {
+    versions: function () {
+      var u = window.navigator.userAgent;
+      return {
+        userAgent: u,
+        trident: u.indexOf('Trident') > -1, //IE内核
+        presto: u.indexOf('Presto') > -1, //opera内核
+        webKit: u.indexOf('AppleWebKit') > -1, //苹果、谷歌内核
+        gecko: u.indexOf('Gecko') > -1 && u.indexOf('KHTML') == -1, //火狐内核
+        mobile: !!u.match(/AppleWebKit.*Mobile.*/), //是否为移动终端
+        ios: !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/), //ios终端
+        android: u.indexOf('Android') > -1 || u.indexOf('Linux') > -1, //android终端或者uc浏览器
+        iPhone: u.indexOf('iPhone') > -1 || u.indexOf('Mac') > -1, //是否为iPhone或者安卓QQ浏览器
+        iPad: u.indexOf('iPad') > -1, //是否为iPad
+        webApp: u.indexOf('Safari') == -1, //是否为web应用程序，没有头部与底部
+        weixin: u.indexOf('MicroMessenger') == -1, //是否为微信浏览器
+        uc: u.indexOf('UCBrowser') > -1 //是否为android下的UC浏览器
+      };
+    }()
+  }
+  console.log("userAgent:" + browser.versions.userAgent);
+
+  // callback
+  function fontLoaded() {
+    console.log('font loaded');
+    if (document.getElementsByClassName('site-intro-meta')) {
+      document.getElementsByClassName('intro-title')[0].classList.add('intro-fade-in');
+      document.getElementsByClassName('intro-subtitle')[0].classList.add('intro-fade-in');
+      var postIntros = document.getElementsByClassName('post-intros')[0]
+      if (postIntros) {
+        postIntros.classList.add('post-fade-in');
+      }
+    }
+  }
+
+  // UC不支持跨域，所以直接显示
+  function asyncCb(){
+    if (browser.versions.uc) {
+      console.log("UCBrowser");
+      fontLoaded();
+    } else {
+      WebFont.load({
+        custom: {
+          families: ['Oswald-Regular']
+        },
+        loading: function () {  //所有字体开始加载
+          // console.log('loading');
+        },
+        active: function () {  //所有字体已渲染
+          fontLoaded();
+        },
+        inactive: function () { //字体预加载失败，无效字体或浏览器不支持加载
+          console.log('inactive: timeout');
+          fontLoaded();
+        },
+        timeout: 5000 // Set the timeout to two seconds
+      });
+    }
+  }
+
+  function asyncErr(){
+    console.warn('script load from CDN failed, will load local script')
+  }
+
+  // load webfont-loader async, and add callback function
+  function async(u, cb, err) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (cb) { o.addEventListener('load', function (e) { cb(null, e); }, false); }
+    if (err) { o.addEventListener('error', function (e) { err(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+
+  var asyncLoadWithFallBack = function(arr, success, reject) {
+      var currReject = function(){
+        reject()
+        arr.shift()
+        if(arr.length)
+          async(arr[0], success, currReject)
+        }
+
+      async(arr[0], success, currReject)
+  }
+
+  asyncLoadWithFallBack([
+    "https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js", 
+    "https://cdn.bootcss.com/webfont/1.6.28/webfontloader.js",
+    "/lib/webfontloader.min.js"
+  ], asyncCb, asyncErr)
+</script>        
+        <img class="loading" src="/assets/loading.svg" style="display: block; margin: 6rem auto 0 auto; width: 6rem; height: 6rem;" />
+        <div class="container container-unloaded">
+            <main class="main post-page">
+    <article class="article-entry">
+        <p>好久没写科普文..</p>
+<p>在iOS开发的过程中难免遇到各种问题，本文将结合作者这么多年（其实也没几年）的擦屁股和挖坑经验，总结一套调试方法，让你在遇到问题时不盲目，有切入点，可以自己一步一步分析去解决问题。</p>
+<ol>
+<li>逻辑问题调试</li>
+<li>崩溃问题调试</li>
+<li>内存问题调试</li>
+</ol>
+<h2 id="逻辑问题调试"><a href="#逻辑问题调试" class="headerlink" title="逻辑问题调试"></a>逻辑问题调试</h2><p>在阅读一份完全不熟悉的代码时，不知道从何入手，如何找到自己感兴趣的部分。这里介绍几个手段定位到你感兴趣的点：</p>
+<h3 id="关键字搜索"><a href="#关键字搜索" class="headerlink" title="关键字搜索"></a>关键字搜索</h3><p>ripgrep <a href="https://github.com/BurntSushi/ripgrep" target="_blank" rel="noopener">https://github.com/BurntSushi/ripgrep</a> 这个工具，可以通过关键字快速过滤出你感兴趣的内容。</p>
+<p>最近，在解崩溃时遇到 KERN_PROTECTION_FAILURE 这个异常类型，想了解一下在什么情况下会产生。于是直接在xnu源码中搜索, 就可以快速定位到错误产生的相关代码，了解其原理。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line">$ rg -C <span class="number">10</span> <span class="string">" = KERN_PROTECTION_FAILURE"</span></span><br><span class="line">bsd/vm/vm_unix.c</span><br><span class="line"><span class="number">859</span>-	task = p-&gt;task;</span><br><span class="line"><span class="number">860</span>-	task_reference(task);</span><br><span class="line"><span class="number">861</span>-</span><br><span class="line"><span class="number">862</span>-	<span class="comment">/* If we aren't root and target's task access port is set... */</span></span><br><span class="line"><span class="number">863</span>-	<span class="keyword">if</span> (!kauth_cred_issuser(kauth_cred_get()) &amp;&amp;</span><br><span class="line"><span class="number">864</span>-		p != current_proc() &amp;&amp;</span><br><span class="line"><span class="number">865</span>-		(task_get_task_access_port(task, &amp;tfpport) == <span class="number">0</span>) &amp;&amp;</span><br><span class="line"><span class="number">866</span>-		(tfpport != IPC_PORT_NULL)) &#123;</span><br><span class="line"><span class="number">867</span>-</span><br><span class="line"><span class="number">868</span>-		<span class="keyword">if</span> (tfpport == IPC_PORT_DEAD) &#123;</span><br><span class="line"><span class="number">869</span>:			error = KERN_PROTECTION_FAILURE;</span><br><span class="line"><span class="number">870</span>-			<span class="keyword">goto</span> tfpout;</span><br><span class="line"><span class="number">871</span>-		&#125;</span><br><span class="line"><span class="number">872</span>-</span><br><span class="line"><span class="number">873</span>-		<span class="comment">/*</span></span><br><span class="line"><span class="comment">874-		 * Drop the proc_find proc ref before making an upcall</span></span><br><span class="line"><span class="comment">875-		 * to taskgated, since holding a proc_find</span></span><br><span class="line"><span class="comment">876-		 * ref while making an upcall can cause deadlock.</span></span><br><span class="line"><span class="comment">877-		 */</span></span><br><span class="line"><span class="number">878</span>-		proc_rele(p);</span><br><span class="line"><span class="number">879</span>-		p = PROC_NULL;</span><br><span class="line"></span><br><span class="line">osfmk/vm/vm_fault.c</span><br><span class="line"><span class="number">3632</span>-	 */</span><br><span class="line"><span class="number">3633</span>-	<span class="keyword">if</span> (fault_type == VM_PROT_READ &amp;&amp;</span><br><span class="line"><span class="number">3634</span>-		(prot &amp; VM_PROT_EXECUTE) &amp;&amp;</span><br><span class="line"><span class="number">3635</span>-		!(prot &amp; VM_PROT_READ) &amp;&amp;</span><br><span class="line"><span class="number">3636</span>-		pmap_enforces_execute_only(pmap)) &#123;</span><br><span class="line"><span class="number">3637</span>-			vm_object_unlock(object);</span><br><span class="line"><span class="number">3638</span>-			vm_map_unlock_read(<span class="built_in">map</span>);</span><br><span class="line"><span class="number">3639</span>-			<span class="keyword">if</span> (real_map != <span class="built_in">map</span>) &#123;</span><br><span class="line"><span class="number">3640</span>-				vm_map_unlock(real_map);</span><br><span class="line"><span class="number">3641</span>-			&#125;</span><br><span class="line"><span class="number">3642</span>:			kr = KERN_PROTECTION_FAILURE;</span><br><span class="line"><span class="number">3643</span>-			<span class="keyword">goto</span> done;</span><br><span class="line"><span class="number">3644</span>-	&#125;</span><br><span class="line"><span class="number">3645</span>-<span class="meta">#<span class="meta-keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+
+<h3 id="日志输出内容搜索"><a href="#日志输出内容搜索" class="headerlink" title="日志输出内容搜索"></a>日志输出内容搜索</h3><p>程序运行日志中的输出，很多内容都是写死在代码中的，这个是搜索利器，通过输出，定位到具体的函数。</p>
+<p>当使用 otool -Vt 去反编译 text段时，可以看到，otool 可以反编译出 字符串常量的使用。literal pool for: “you”, 一看 “literal pool for:”极有可能存在在代码 printf中。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0000000000001fb0	movq	%rsi, -0x10(%rbp)</span><br><span class="line">0000000000001fb4	leaq	0x15(%rip), %rsi ## literal pool for: &quot;you&quot;</span><br><span class="line">0000000000001fbb	movq	%rsi, -0x18(%rbp)</span><br><span class="line">0000000000001fbf	leaq	0xe(%rip), %rsi ## literal pool for: &quot;fuck&quot;</span><br></pre></td></tr></table></figure>
+
+<p>通过该关键字搜索 直接定位到了输出内容的地方。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta"># xiejunyi @ 192 in ~/cctools-886 on git:master x [16:49:41] </span></span><br><span class="line">$ rg -C <span class="number">10</span> <span class="string">"literal pool for:"</span>         </span><br><span class="line">otool/arm_disasm.c</span><br><span class="line"><span class="number">5250</span>-		   info-&gt;indirect_symbols, info-&gt;nindirect_symbols,</span><br><span class="line"><span class="number">5251</span>-		   info-&gt;symbols, <span class="literal">NULL</span>, info-&gt;nsymbols, info-&gt;strings,</span><br><span class="line"><span class="number">5252</span>-		   info-&gt;strings_size);</span><br><span class="line"><span class="number">5253</span>-	<span class="keyword">if</span>(name != <span class="literal">NULL</span>)</span><br><span class="line"><span class="number">5254</span>-	    <span class="built_in">fprintf</span>(stream, <span class="string">"\t@ symbol stub for: %s"</span>, name);</span><br><span class="line"><span class="number">5255</span>-	<span class="keyword">else</span>&#123;</span><br><span class="line"><span class="number">5256</span>-	    <span class="keyword">uint64_t</span> reference_type;</span><br><span class="line"><span class="number">5257</span>-	    reference_type = LLVMDisassembler_ReferenceType_In_PCrel_Load;</span><br><span class="line"><span class="number">5258</span>-	    name = guess_literal_pointer(addr, pc, &amp;reference_type, info);</span><br><span class="line"><span class="number">5259</span>-	    <span class="keyword">if</span>(name != <span class="literal">NULL</span>)&#123;</span><br><span class="line"><span class="number">5260</span>:		<span class="built_in">fprintf</span>(stream, <span class="string">" literal pool for: "</span>);</span><br><span class="line"><span class="number">5261</span>-		<span class="keyword">if</span>(reference_type ==</span><br><span class="line"><span class="number">5262</span>-		   LLVMDisassembler_ReferenceType_Out_LitPool_CstrAddr)</span><br><span class="line"><span class="number">5263</span>-		    <span class="built_in">fprintf</span>(stream, <span class="string">"\"%s\""</span>, name);</span><br><span class="line"><span class="number">5264</span>-		<span class="keyword">else</span></span><br><span class="line"><span class="number">5265</span>-		    <span class="built_in">fprintf</span>(stream, <span class="string">"%s"</span>, name);</span><br><span class="line"><span class="number">5266</span>-	    &#125;</span><br><span class="line"><span class="number">5267</span>-	&#125;</span><br><span class="line"><span class="number">5268</span>-    &#125;</span><br><span class="line"><span class="number">5269</span>-&#125;</span><br><span class="line"><span class="number">5270</span>-</span><br></pre></td></tr></table></figure>
+
+
+
+
+<h3 id="调试打断点"><a href="#调试打断点" class="headerlink" title="调试打断点"></a>调试打断点</h3><p>通过上面的文本搜索，你可能已经定位到了关键函数。这时，如果你可以对代码进行调试，在目标函数设置断点可以看到调用栈，快速了解代码的执行逻辑。<br>我在分析ld对symboltabl处理时打了几个断点</p>
+<img src="/2020/02/12/iosdevdebug/ld_breakpoint.png" class="" title="ld_breakpoint.png">
+
+<p>然后通过调用栈了解相关的程序执行逻辑。<br>main -&gt; 执行ld pass -&gt; 构建序数表 -&gt; 构建nametable</p>
+<img src="/2020/02/12/iosdevdebug/ld_callstack.png" class="" title="ld_callstack.png">
+
+
+<h3 id="通过log"><a href="#通过log" class="headerlink" title="通过log"></a>通过log</h3><p>一般靠谱点的项目中会有各种日志打印，通常需要自行打开。我们在使用一些工具的时候也会打开调试日志进行分析，常见的是通过–verbose选项。<br>在代码中，很容易就可以找到一些打印输入，然后将其开启。通过代码作者的log，我们可以了解代码运行时的一些关键信息。</p>
+<p>这是ld64的 printStatistics log </p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">           ld total time:  343.4 seconds ( 100.0%)</span><br><span class="line">     option parsing time:    0.2 milliseconds (   0.0%)</span><br><span class="line">  object file processing:    0.0 milliseconds (   0.0%)</span><br><span class="line">         resolve symbols:    5.3 milliseconds (   0.0%)</span><br><span class="line">         build atom list:    0.0 milliseconds (   0.0%)</span><br><span class="line">                 passess:  343.4 seconds (  99.9%)</span><br><span class="line">            write output:    0.7 milliseconds (   0.0%)</span><br><span class="line">pageins=6169353, pageouts=3545, faults=247734135</span><br><span class="line">processed   1 object files,  totaling           2,720 bytes</span><br><span class="line">processed   0 archive files, totaling               0 bytes</span><br><span class="line">processed  35 dylib files</span><br></pre></td></tr></table></figure>
+
+<p>代码中也存在 通过开关打开的log，找到<em>s</em>log的设置入口，打开即可。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (_s_log ) <span class="built_in">fprintf</span>(<span class="built_in">stderr</span>, <span class="string">"could not order %s as %u because it was already laid out earlier by %s as %u\n"</span>,</span><br><span class="line">                atom-&gt;name(), index, _followOnStarts[atom]-&gt;name(), _ordinalOverrideMap[atom] );</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="崩溃问题调试"><a href="#崩溃问题调试" class="headerlink" title="崩溃问题调试"></a>崩溃问题调试</h2><h3 id="查看和分析崩溃日志"><a href="#查看和分析崩溃日志" class="headerlink" title="查看和分析崩溃日志"></a>查看和分析崩溃日志</h3><p>程序崩溃时，给开发者解决问题的最主要的信息就是崩溃日志了。<br>iOS系统自带crash捕获和日志生成功能，可以通过xcode查看设备中存储崩溃日志</p>
+<img src="/2020/02/12/iosdevdebug/view_iphone_crash.png" class="" title="view_iphone_crash.png">
+
+<p>通过crash日志，可以看到程序崩溃时的现场信息，主要关注调用栈信息和崩溃类型。</p>
+<img src="/2020/02/12/iosdevdebug/crashlog.png" class="" title="crashlog.png">
+
+<p>如何分析crashlog就不详细展开了，可以网上搜一搜相关的文章。<br>这里提几个点：</p>
+<ol>
+<li>反编译代码 通过崩溃函数的汇编代码获取更多的信息（例如：常见的野指针问题我们可以分析出哪个对象野了）</li>
+<li>常见崩溃问题的了解，crash watchdog oom 野指针 循环调用导致栈溢出… </li>
+</ol>
+<h3 id="Xcode中debug程序"><a href="#Xcode中debug程序" class="headerlink" title="Xcode中debug程序"></a>Xcode中debug程序</h3><p>使用 xcode debug 程序时，Xcode的调试器 会自动监听程序的exception端口，当崩溃发生时，xcode会帮我们保留现场。<br>开启Exception BreakPoint</p>
+<img src="/2020/02/12/iosdevdebug/open_exception_breakpoint.png" class="" title="open_exception_breakpoint.png">
+
+<p>崩溃时，Xcode会自动定位到崩溃的代码行。</p>
+<img src="/2020/02/12/iosdevdebug/exception_crash.png" class="" title="exception_crash.png">
+
+
+<h2 id="内存问题调试"><a href="#内存问题调试" class="headerlink" title="内存问题调试"></a>内存问题调试</h2><h3 id="循环引用"><a href="#循环引用" class="headerlink" title="循环引用"></a>循环引用</h3><p>iOS开发中常见的内容问题是 循环引用，xcode8引入了memory graph这一神器来分析这类问题。<br>在Xcode下方的工具栏中进入，</p>
+<img src="/2020/02/12/iosdevdebug/memory_graph_btn.png" class="" title="memory_graph_btn.png">
+
+<p>如下代码 可以看到 obj1 obj2 循环引用了。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">@interface TestClass : NSObject</span><br><span class="line">@property (nonatomic, strong) NSMutableArray *array;</span><br><span class="line">@end</span><br><span class="line">@implementation TestClass</span><br><span class="line"></span><br><span class="line">- (instancetype)init &#123;</span><br><span class="line">    if (self = [super init]) &#123;</span><br><span class="line">        self.array = @[].mutableCopy;</span><br><span class="line">    &#125;</span><br><span class="line">    return self;</span><br><span class="line">&#125;</span><br><span class="line">@end</span><br><span class="line"></span><br><span class="line">@interface ViewController ()</span><br><span class="line"></span><br><span class="line">@property (nonatomic, strong) NSMutableArray *array;</span><br><span class="line"></span><br><span class="line">@end</span><br><span class="line"></span><br><span class="line">@implementation ViewController</span><br><span class="line">- (void)viewDidLoad &#123;</span><br><span class="line">    [super viewDidLoad];</span><br><span class="line">    TestClass *obj1 = [TestClass new];</span><br><span class="line">    TestClass *obj2 = [TestClass new];</span><br><span class="line"></span><br><span class="line">    [obj1.array addObject:obj2];</span><br><span class="line">    [obj2.array addObject:obj1];</span><br><span class="line">&#125;</span><br><span class="line">@end</span><br></pre></td></tr></table></figure>
+
+<p>通过memory graph 可以直观的看到 </p>
+<ol>
+<li>对象间的引用关系</li>
+<li>对象分配的调用栈（需要打开Malloc Stack）</li>
+<li>有内存问题的对象列表</li>
+</ol>
+<img src="/2020/02/12/iosdevdebug/memory_graph.png" class="" title="memory_graph.png">
+
+<h3 id="野指针"><a href="#野指针" class="headerlink" title="野指针"></a>野指针</h3><p>可通过下图两个工具排查</p>
+<img src="/2020/02/12/iosdevdebug/memorytools.png" class="" title="memorytools.png">
+
+
+    </article>
+    <!-- license  -->
+    
+        <div class="license-wrapper">
+            <p>Author：<a href="http://yoursite.com">junyixie</a>
+            <p>原文链接：<a href="http://yoursite.com/2020/02/12/iosdevdebug/">http://yoursite.com/2020/02/12/iosdevdebug/</a>
+            <p>发表日期：<a href="http://yoursite.com/2020/02/12/iosdevdebug/">February 12th 2020, 3:48:35 pm</a>
+            <p>更新日期：<a href="http://yoursite.com/2020/02/12/iosdevdebug/">February 12th 2020, 5:53:51 pm</a>
+            <p>版权声明：本文采用<a rel="license noopener" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>进行许可</p>
+        </div>
+    
+    <!-- paginator  -->
+    <ul class="post-paginator">
+        <li class="next">
+            
+                <div class="nextSlogan">Next Post</div>
+                <a href= "/2020/02/19/crashruntimeinfo/" title= "Block ABI 文档阅读">
+                    <div class="nextTitle">Block ABI 文档阅读</div>
+                </a>
+            
+        </li>
+        <li class="previous">
+            
+                <div class="prevSlogan">Previous Post</div>
+                <a href= "/2019/11/26/projectpodenv/" title= "CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境">
+                    <div class="prevTitle">CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</div>
+                </a>
+            
+        </li>
+    </ul>
+    <!-- 评论插件 -->
+    <!-- 来必力City版安装代码 -->
+
+<!-- City版安装代码已完成 -->
+    
+    
+    <!-- gitalk评论 -->
+
+    <!-- utteranc评论 -->
+
+    <!-- partial('_partial/comment/changyan') -->
+    <!--PC版-->
+
+
+    
+    
+
+    <!-- 评论 -->
+</main>
+            <!-- profile -->
+            
+        </div>
+        <footer class="footer footer-unloaded">
+    <!-- social  -->
+    
+    <div class="social">
+        
+    
+        
+            
+                <a href="mailto:xie.junyi@outlook.com" target="_blank" rel="noopener" class="iconfont-archer email" title=email ></a>
+            
+        
+    
+        
+            
+                <a href="//github.com/junyixie" class="iconfont-archer github" target="_blank" title=github></a>
+            
+        
+    
+        
+            
+                <span class="iconfont-archer wechat" title=wechat>
+                  
+                  <img class="profile-qr" src="/assets/example_qr.png" />
+                </span>
+            
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+
+    </div>
+    
+    <!-- powered by Hexo  -->
+    <div class="copyright">
+        <span id="hexo-power">Powered by <a href="https://hexo.io/" target="_blank">Hexo</a></span><span class="iconfont-archer power">&#xe635;</span><span id="theme-info">theme <a href="https://github.com/fi3ework/hexo-theme-archer" target="_blank">Archer</a></span>
+    </div>
+    <!-- 不蒜子  -->
+    
+    <div class="busuanzi-container">
+    
+     
+    <span id="busuanzi_container_site_pv">PV: <span id="busuanzi_value_site_pv"></span> :)</span>
+    
+    </div>
+    
+</footer>
+    </div>
+    <!-- toc -->
+    
+    <div class="toc-wrapper" style=
+    
+
+
+
+
+
+
+
+top:50vh;
+
+    >
+        <div class="toc-catalog">
+            <span class="iconfont-archer catalog-icon">&#xe613;</span><span>CATALOG</span>
+        </div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#逻辑问题调试"><span class="toc-number">1.</span> <span class="toc-text">逻辑问题调试</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#关键字搜索"><span class="toc-number">1.1.</span> <span class="toc-text">关键字搜索</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#日志输出内容搜索"><span class="toc-number">1.2.</span> <span class="toc-text">日志输出内容搜索</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#调试打断点"><span class="toc-number">1.3.</span> <span class="toc-text">调试打断点</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#通过log"><span class="toc-number">1.4.</span> <span class="toc-text">通过log</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#崩溃问题调试"><span class="toc-number">2.</span> <span class="toc-text">崩溃问题调试</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#查看和分析崩溃日志"><span class="toc-number">2.1.</span> <span class="toc-text">查看和分析崩溃日志</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Xcode中debug程序"><span class="toc-number">2.2.</span> <span class="toc-text">Xcode中debug程序</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#内存问题调试"><span class="toc-number">3.</span> <span class="toc-text">内存问题调试</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#循环引用"><span class="toc-number">3.1.</span> <span class="toc-text">循环引用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#野指针"><span class="toc-number">3.2.</span> <span class="toc-text">野指针</span></a></li></ol></li></ol>
+    </div>
+    
+    <div class="back-top iconfont-archer">&#xe639;</div>
+    <div class="sidebar sidebar-hide">
+    <ul class="sidebar-tabs sidebar-tabs-active-0">
+        <li class="sidebar-tab-archives"><span class="iconfont-archer">&#xe67d;</span><span class="tab-name">Archive</span></li>
+        <li class="sidebar-tab-tags"><span class="iconfont-archer">&#xe61b;</span><span class="tab-name">Tag</span></li>
+        <li class="sidebar-tab-categories"><span class="iconfont-archer">&#xe666;</span><span class="tab-name">Cate</span></li>
+    </ul>
+    <div class="sidebar-content sidebar-content-show-archive">
+          <div class="sidebar-panel-archives">
+    <!-- 在ejs中将archive按照时间排序 -->
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <div class="total-and-search">
+        <div class="total-archive">
+        Total : 29
+        </div>
+        <!-- search  -->
+        
+    </div>
+    
+    <div class="post-archive">
+    
+    
+    
+    
+    <div class="archive-year"> 2020 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2020/10/05/cpythonstrip/" >cpython3.8瘦身到0.95mb</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2020/04/10/objcblockimp/" >imp_implementationWithBlock 的内部实现 trampoline</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/08</span><a class="archive-post-title" href= "/2020/04/08/lliread/" >lli源码阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/01</span><a class="archive-post-title" href= "/2020/04/01/MachOObjC/" >MachO（一） ObjC类结构的加载</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/25</span><a class="archive-post-title" href= "/2020/03/25/DobbyRead/" >Dobby源码学习（一） Inline Hook</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/19</span><a class="archive-post-title" href= "/2020/03/19/cocoapods-new-feature/" >cocoapods 新feature 开发 Example, On Demand Resource</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/04</span><a class="archive-post-title" href= "/2020/03/04/lazybind/" >dyld(2) lazy bind 和 dyld_stub_binder</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/03</span><a class="archive-post-title" href= "/2020/03/03/macholinkedit/" >dyld(1) MachO Linkedit 段</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/19</span><a class="archive-post-title" href= "/2020/02/19/crashruntimeinfo/" >Block ABI 文档阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/12</span><a class="archive-post-title" href= "/2020/02/12/iosdevdebug/" >iOS开发必备的问题定位调试技巧</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2019 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">11/26</span><a class="archive-post-title" href= "/2019/11/26/projectpodenv/" >CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2019/10/05/cocoapodsdev/" >CocoaPods插件开发原理(一) CocoaPods做了啥</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/28</span><a class="archive-post-title" href= "/2019/09/28/CrashMonitorSystem/" >崩溃捕获系统的原理（一）异常信号</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2018 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/30</span><a class="archive-post-title" href= "/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" >DWARF和符号化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/16</span><a class="archive-post-title" href= "/2018/09/16/CrashSymbolicateSystemDesign/" >APM Crash系统</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">06/13</span><a class="archive-post-title" href= "/2018/06/13/libmalloc/" >libmalloc "malloc" 探究</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/13</span><a class="archive-post-title" href= "/2018/04/13/dependency/" >关于架构和编码的思考</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2018/04/10/iosoom/" >iOS OOM</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2018/01/15/sharedlibraryandpic/" >fishhook与共享库和PIC</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2017 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/24</span><a class="archive-post-title" href= "/2017/12/24/In-depthUnderStandingOfThreadSafety/" >理解线程安全</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/04</span><a class="archive-post-title" href= "/2017/12/04/safeSwizzleRSSwizzleAnalyze/" >Method Swizzling 的正确途径</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/27</span><a class="archive-post-title" href= "/2017/10/27/dyld3withappstart/" >链接和App启动速度优化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/26</span><a class="archive-post-title" href= "/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/" >理解HTTPS</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">05/01</span><a class="archive-post-title" href= "/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/" >Objective-C 深入理解中的消息机制和方法调用</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/20</span><a class="archive-post-title" href= "/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" >Cocoa 深入理解KVO</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/06</span><a class="archive-post-title" href= "/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/" >理解 Objc Runtime</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/01</span><a class="archive-post-title" href= "/2017/02/01/Objective-C-weak-%E5%85%B3%E9%94%AE%E5%AD%97-%E5%AE%9E%E7%8E%B0-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Objective-C weak 关键字 实现 源码分析</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/24</span><a class="archive-post-title" href= "/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/" >iOS Core Animation性能调优 笔记</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2017/01/15/Aspects-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Aspects 源码分析</a>
+        </li>
+    
+    </div>
+  </div>
+        <div class="sidebar-panel-tags">
+    <div class="sidebar-tags-name">
+    
+    </div>
+    <div class="iconfont-archer sidebar-tags-empty">&#xe678;</div>
+    <div class="tag-load-fail" style="display: none; color: #ccc; font-size: 0.6rem;">
+    缺失模块。<br/>
+    1、请确保node版本大于6.2<br/>
+    2、在博客根目录（注意不是archer根目录）执行以下命令：<br/>
+    <span style="color: #f75357; font-size: 1rem; line-height: 2rem;">npm i hexo-generator-json-content --save</span><br/>
+    3、在根目录_config.yml里添加配置：
+    <pre style="color: #787878; font-size: 0.6rem;">
+jsonContent:
+  meta: false
+  pages: false
+  posts:
+    title: true
+    date: true
+    path: true
+    text: false
+    raw: false
+    content: false
+    slug: false
+    updated: false
+    comments: false
+    link: false
+    permalink: false
+    excerpt: false
+    categories: true
+    tags: true</pre>
+    </div> 
+    <div class="sidebar-tags-list"></div>
+</div>
+        <div class="sidebar-panel-categories">
+    <div class="sidebar-categories-name">
+    
+        <span class="sidebar-category-name" data-categories="iOS"><span class="iconfont-archer">&#xe60a;</span>iOS</span>
+    
+        <span class="sidebar-category-name" data-categories="源码分析"><span class="iconfont-archer">&#xe60a;</span>源码分析</span>
+    
+        <span class="sidebar-category-name" data-categories="APM"><span class="iconfont-archer">&#xe60a;</span>APM</span>
+    
+        <span class="sidebar-category-name" data-categories="设计架构"><span class="iconfont-archer">&#xe60a;</span>设计架构</span>
+    
+        <span class="sidebar-category-name" data-categories="研发流程"><span class="iconfont-archer">&#xe60a;</span>研发流程</span>
+    
+        <span class="sidebar-category-name" data-categories="Hook"><span class="iconfont-archer">&#xe60a;</span>Hook</span>
+    
+    </div>
+    <div class="iconfont-archer sidebar-categories-empty">&#xe678;</div>
+    <div class="sidebar-categories-list"></div>
+</div>
+    </div>
+</div> 
+    <script>
+    var siteMeta = {
+        root: "/",
+        author: "junyixie"
+    }
+</script>
+    <!-- CDN failover -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+    <script type="text/javascript">
+        if (typeof window.$ === 'undefined')
+        {
+            console.warn('jquery load from jsdelivr failed, will load local script')
+            document.write('<script src="/lib/jquery.min.js">\x3C/script>')
+        }
+    </script>
+    <script src="/scripts/main.js"></script>
+    <!-- algolia -->
+    
+    <!-- busuanzi  -->
+    
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    
+    <!-- CNZZ  -->
+    
+    </div>
+    <!-- async load share.js -->
+    
+        <script src="/scripts/share.js" async></script>    
+     
+    </body>
+</html>
+
+

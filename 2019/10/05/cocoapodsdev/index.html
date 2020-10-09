@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+    <!-- title -->
+
+
+
+
+<!-- keywords -->
+
+
+
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" >
+    <meta name="author" content="junyixie">
+    <meta name="renderer" content="webkit">
+    <meta name="copyright" content="junyixie">
+    
+    <meta name="keywords" content="hexo,hexo-theme,hexo-blog,blog,谢俊逸">
+    
+    <meta name="description" content="">
+    <meta name="description" content="最近入职手淘，搞了一下基于CocoaPods的工程化的升级改造优化。自己也是第一次接触这块，写篇文章总结一下。 开发基础CocoaPods插件开发会涉及到的各种概念。 RubyGems: Ruby程序包管理器Gemfile: 定义你的应用依赖哪些第三方包，bundle根据该配置去寻找这些包。Gem: 封装起来的Ruby应用程序或代码库。Bundle: 根据Gemfile安装插件 CocoaPods">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CocoaPods插件开发原理(一) CocoaPods做了啥">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;10&#x2F;05&#x2F;cocoapodsdev&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="最近入职手淘，搞了一下基于CocoaPods的工程化的升级改造优化。自己也是第一次接触这块，写篇文章总结一下。 开发基础CocoaPods插件开发会涉及到的各种概念。 RubyGems: Ruby程序包管理器Gemfile: 定义你的应用依赖哪些第三方包，bundle根据该配置去寻找这些包。Gem: 封装起来的Ruby应用程序或代码库。Bundle: 根据Gemfile安装插件 CocoaPods">
+<meta property="og:locale" content="en">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;10&#x2F;05&#x2F;cocoapodsdev&#x2F;build.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;10&#x2F;05&#x2F;cocoapodsdev&#x2F;diff.png">
+<meta property="og:updated_time" content="2020-01-08T16:18:36.642Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;10&#x2F;05&#x2F;cocoapodsdev&#x2F;build.png">
+    <meta http-equiv="Cache-control" content="no-cache">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    
+    <title>CocoaPods插件开发原理(一) CocoaPods做了啥 · xiejunyi,谢俊逸</title>
+    <style type="text/css">
+    @font-face {
+        font-family: 'Oswald-Regular';
+        src: url("/font/Oswald-Regular.ttf");
+    }
+
+    body {
+        margin: 0;
+    }
+
+    header,
+    footer,
+    .back-top,
+    .sidebar,
+    .container,
+    .site-intro-meta,
+    .toc-wrapper {
+        display: none;
+    }
+
+    .site-intro {
+        position: relative;
+        z-index: 3;
+        width: 100%;
+        /* height: 50vh; */
+        overflow: hidden;
+    }
+
+    .site-intro-placeholder {
+        position: absolute;
+        z-index: -2;
+        top: 0;
+        left: 0;
+        width: calc(100% + 300px);
+        height: 100%;
+        background: repeating-linear-gradient(-45deg, #444 0, #444 80px, #333 80px, #333 160px);
+        background-position: center center;
+        transform: translate3d(-226px, 0, 0);
+        animation: gradient-move 2.5s ease-out 0s infinite;
+    }
+
+    @keyframes gradient-move {
+        0% {
+            transform: translate3d(-226px, 0, 0);
+        }
+        100% {
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+</style>
+
+    <link rel="preload" href= "/css/style.css?v=20180824" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    <link rel="stylesheet" href= "/css/mobile.css?v=20180824" media="(max-width: 980px)">
+    
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    
+    <!-- /*! loadCSS. [c]2017 Filament Group, Inc. MIT License */
+/* This file is meant as a standalone workflow for
+- testing support for link[rel=preload]
+- enabling async CSS loading in browsers that do not support rel=preload
+- applying rel preload css once loaded, whether supported or not.
+*/ -->
+<script>
+(function( w ){
+	"use strict";
+	// rel=preload support test
+	if( !w.loadCSS ){
+		w.loadCSS = function(){};
+	}
+	// define on the loadCSS obj
+	var rp = loadCSS.relpreload = {};
+	// rel=preload feature support test
+	// runs once and returns a function for compat purposes
+	rp.support = (function(){
+		var ret;
+		try {
+			ret = w.document.createElement( "link" ).relList.supports( "preload" );
+		} catch (e) {
+			ret = false;
+		}
+		return function(){
+			return ret;
+		};
+	})();
+
+	// if preload isn't supported, get an asynchronous load by using a non-matching media attribute
+	// then change that media back to its intended value on load
+	rp.bindMediaToggle = function( link ){
+		// remember existing media attr for ultimate state, or default to 'all'
+		var finalMedia = link.media || "all";
+
+		function enableStylesheet(){
+			link.media = finalMedia;
+		}
+
+		// bind load handlers to enable media
+		if( link.addEventListener ){
+			link.addEventListener( "load", enableStylesheet );
+		} else if( link.attachEvent ){
+			link.attachEvent( "onload", enableStylesheet );
+		}
+
+		// Set rel and non-applicable media type to start an async request
+		// note: timeout allows this to happen async to let rendering continue in IE
+		setTimeout(function(){
+			link.rel = "stylesheet";
+			link.media = "only x";
+		});
+		// also enable media after 3 seconds,
+		// which will catch very old browsers (android 2.x, old firefox) that don't support onload on link
+		setTimeout( enableStylesheet, 3000 );
+	};
+
+	// loop through link elements in DOM
+	rp.poly = function(){
+		// double check this to prevent external calls from running
+		if( rp.support() ){
+			return;
+		}
+		var links = w.document.getElementsByTagName( "link" );
+		for( var i = 0; i < links.length; i++ ){
+			var link = links[ i ];
+			// qualify links to those with rel=preload and as=style attrs
+			if( link.rel === "preload" && link.getAttribute( "as" ) === "style" && !link.getAttribute( "data-loadcss" ) ){
+				// prevent rerunning on link
+				link.setAttribute( "data-loadcss", true );
+				// bind listeners to toggle media back
+				rp.bindMediaToggle( link );
+			}
+		}
+	};
+
+	// if unsupported, run the polyfill
+	if( !rp.support() ){
+		// run once at least
+		rp.poly();
+
+		// rerun poly on an interval until onload
+		var run = w.setInterval( rp.poly, 500 );
+		if( w.addEventListener ){
+			w.addEventListener( "load", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		} else if( w.attachEvent ){
+			w.attachEvent( "onload", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		}
+	}
+
+
+	// commonjs
+	if( typeof exports !== "undefined" ){
+		exports.loadCSS = loadCSS;
+	}
+	else {
+		w.loadCSS = loadCSS;
+	}
+}( typeof global !== "undefined" ? global : this ) );
+</script>
+
+    <link rel="icon" href= "/assets/favicon.ico" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js" as="script" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js" as="script" />
+    <link rel="preload" href="/scripts/main.js" as="script" />
+    <link rel="preload" as="font" href="/font/Oswald-Regular.ttf" crossorigin>
+    <link rel="preload" as="font" href="https://at.alicdn.com/t/font_327081_1dta1rlogw17zaor.woff" crossorigin>
+    
+    <!-- fancybox -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.js" defer></script>
+    <!-- 百度统计  -->
+    
+    <!-- 谷歌统计  -->
+    
+</head>
+
+    
+        <body class="post-body">
+    
+    
+<header class="header">
+
+    <div class="read-progress"></div>
+    <div class="header-sidebar-menu">&#xe775;</div>
+    <!-- post页的toggle banner  -->
+    
+    <div class="banner">
+            <div class="blog-title">
+                <a href="/" >xiejunyi&#39;s blog.</a>
+            </div>
+            <div class="post-title">
+                <a href="#" class="post-name">CocoaPods插件开发原理(一) CocoaPods做了啥</a>
+            </div>
+    </div>
+    
+    <a class="home-link" href=/>xiejunyi's blog.</a>
+</header>
+    <div class="wrapper">
+        <div class="site-intro" style="
+
+
+
+
+
+
+
+height:50vh;
+">
+    
+    <!-- 主页  -->
+    
+    
+    <!-- 404页  -->
+            
+    <div class="site-intro-placeholder"></div>
+    <div class="site-intro-img" style="background-image: url(/intro/post-bg.jpg)"></div>
+    <div class="site-intro-meta">
+        <!-- 标题  -->
+        <h1 class="intro-title">
+            <!-- 主页  -->
+            
+            CocoaPods插件开发原理(一) CocoaPods做了啥
+            <!-- 404 -->
+            
+        </h1>
+        <!-- 副标题 -->
+        <p class="intro-subtitle">
+            <!-- 主页副标题  -->
+            
+            
+            <!-- 404 -->
+            
+        </p>
+        <!-- 文章页meta -->
+        
+            <div class="post-intros">
+                <!-- 文章页标签  -->
+                
+                
+                    <div class="post-intro-read">
+                        <span>Word count: <span class="post-count word-count">1.4k</span>Reading time: <span class="post-count reading-time">7 min</span></span>
+                    </div>
+                
+                <div class="post-intro-meta">
+                    <span class="post-intro-calander iconfont-archer">&#xe676;</span>
+                    <span class="post-intro-time">2019/10/05</span>
+                    
+                    <span id="busuanzi_container_page_pv" class="busuanzi-pv">
+                        <span class="iconfont-archer">&#xe602;</span>
+                        <span id="busuanzi_value_page_pv"></span>
+                    </span>
+                    
+                    <span class="shareWrapper">
+                        <span class="iconfont-archer shareIcon">&#xe71d;</span>
+                        <span class="shareText">Share</span>
+                        <ul class="shareList">
+                            <li class="iconfont-archer share-qr" data-type="qr">&#xe75b;
+                                <div class="share-qrcode"></div>
+                            </li>
+                            <li class="iconfont-archer" data-type="weibo">&#xe619;</li>
+                            <li class="iconfont-archer" data-type="qzone">&#xe62e;</li>
+                            <li class="iconfont-archer" data-type="twitter">&#xe634;</li>
+                            <li class="iconfont-archer" data-type="facebook">&#xe67a;</li>
+                        </ul>
+                    </span>
+                </div>
+            </div>
+        
+    </div>
+</div>
+        <script>
+ 
+  // get user agent
+  var browser = {
+    versions: function () {
+      var u = window.navigator.userAgent;
+      return {
+        userAgent: u,
+        trident: u.indexOf('Trident') > -1, //IE内核
+        presto: u.indexOf('Presto') > -1, //opera内核
+        webKit: u.indexOf('AppleWebKit') > -1, //苹果、谷歌内核
+        gecko: u.indexOf('Gecko') > -1 && u.indexOf('KHTML') == -1, //火狐内核
+        mobile: !!u.match(/AppleWebKit.*Mobile.*/), //是否为移动终端
+        ios: !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/), //ios终端
+        android: u.indexOf('Android') > -1 || u.indexOf('Linux') > -1, //android终端或者uc浏览器
+        iPhone: u.indexOf('iPhone') > -1 || u.indexOf('Mac') > -1, //是否为iPhone或者安卓QQ浏览器
+        iPad: u.indexOf('iPad') > -1, //是否为iPad
+        webApp: u.indexOf('Safari') == -1, //是否为web应用程序，没有头部与底部
+        weixin: u.indexOf('MicroMessenger') == -1, //是否为微信浏览器
+        uc: u.indexOf('UCBrowser') > -1 //是否为android下的UC浏览器
+      };
+    }()
+  }
+  console.log("userAgent:" + browser.versions.userAgent);
+
+  // callback
+  function fontLoaded() {
+    console.log('font loaded');
+    if (document.getElementsByClassName('site-intro-meta')) {
+      document.getElementsByClassName('intro-title')[0].classList.add('intro-fade-in');
+      document.getElementsByClassName('intro-subtitle')[0].classList.add('intro-fade-in');
+      var postIntros = document.getElementsByClassName('post-intros')[0]
+      if (postIntros) {
+        postIntros.classList.add('post-fade-in');
+      }
+    }
+  }
+
+  // UC不支持跨域，所以直接显示
+  function asyncCb(){
+    if (browser.versions.uc) {
+      console.log("UCBrowser");
+      fontLoaded();
+    } else {
+      WebFont.load({
+        custom: {
+          families: ['Oswald-Regular']
+        },
+        loading: function () {  //所有字体开始加载
+          // console.log('loading');
+        },
+        active: function () {  //所有字体已渲染
+          fontLoaded();
+        },
+        inactive: function () { //字体预加载失败，无效字体或浏览器不支持加载
+          console.log('inactive: timeout');
+          fontLoaded();
+        },
+        timeout: 5000 // Set the timeout to two seconds
+      });
+    }
+  }
+
+  function asyncErr(){
+    console.warn('script load from CDN failed, will load local script')
+  }
+
+  // load webfont-loader async, and add callback function
+  function async(u, cb, err) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (cb) { o.addEventListener('load', function (e) { cb(null, e); }, false); }
+    if (err) { o.addEventListener('error', function (e) { err(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+
+  var asyncLoadWithFallBack = function(arr, success, reject) {
+      var currReject = function(){
+        reject()
+        arr.shift()
+        if(arr.length)
+          async(arr[0], success, currReject)
+        }
+
+      async(arr[0], success, currReject)
+  }
+
+  asyncLoadWithFallBack([
+    "https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js", 
+    "https://cdn.bootcss.com/webfont/1.6.28/webfontloader.js",
+    "/lib/webfontloader.min.js"
+  ], asyncCb, asyncErr)
+</script>        
+        <img class="loading" src="/assets/loading.svg" style="display: block; margin: 6rem auto 0 auto; width: 6rem; height: 6rem;" />
+        <div class="container container-unloaded">
+            <main class="main post-page">
+    <article class="article-entry">
+        <p>最近入职手淘，搞了一下基于CocoaPods的工程化的升级改造优化。自己也是第一次接触这块，写篇文章总结一下。</p>
+<h2 id="开发基础"><a href="#开发基础" class="headerlink" title="开发基础"></a>开发基础</h2><p>CocoaPods插件开发会涉及到的各种概念。</p>
+<p>RubyGems: Ruby程序包管理器<br>Gemfile: 定义你的应用依赖哪些第三方包，bundle根据该配置去寻找这些包。<br>Gem: 封装起来的Ruby应用程序或代码库。<br>Bundle: 根据Gemfile安装插件</p>
+<h2 id="CocoaPods调试"><a href="#CocoaPods调试" class="headerlink" title="CocoaPods调试"></a>CocoaPods调试</h2><ol>
+<li>克隆CocoaPods代码.</li>
+<li>安装RubyMine.</li>
+<li>通过RubyMine打开工程，会提示install gems.. 点点点…</li>
+<li>add Configurations</li>
+</ol>
+<h2 id="CocoaPods产物分析"><a href="#CocoaPods产物分析" class="headerlink" title="CocoaPods产物分析"></a>CocoaPods产物分析</h2><p>针对于代码工程项目来说，CocoaPods和Xcode的一系列操作，最终都会体现到 build 过程中。</p>
+<img src="/2019/10/05/cocoapodsdev/build.png" class="" title="build.png">
+
+<p>可以看到 主要是 compile, link. 资源文件的处理。</p>
+<p>对于CocoaPods来说，他的处理结果体现在对Xcode工程配置文件的一系列操作。<br>根据pod install 后查 看 diff, 可以简单的分析一下 做了什么。</p>
+<p><strong>主要关注</strong></p>
+<ol>
+<li>project 文件的diff</li>
+<li>xcconfig 的diff</li>
+<li>resource 脚本</li>
+</ol>
+<img src="/2019/10/05/cocoapodsdev/diff.png" class="" title="build.png">
+
+<p>TestCocoaPods.xcodeproj/project.pbxproj: 工程配置文件。<a href="http://www.monobjc.net/xcode-project-file-format.html" target="_blank" rel="noopener">http://www.monobjc.net/xcode-project-file-format.html</a></p>
+<p><strong>可以看到对于原始的project, 主要做了以下处理：</strong><br>    1. 配置xcconfig<br>    2. framework链接 Pods_TestCocoaPods.framework<br>    3. 增加 Check Pods Manifest.lock , resource 资源拷贝 操作</p>
+<p>*<em>工程文件的diff, 主要是增加文件引用，build phase. *</em></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br></pre></td><td class="code"><pre><span class="line">PBXBuildFile section:</span><br><span class="line">E01C29225DD71613589489FA /* Pods_TestCocoaPods.framework in Frameworks */ = &#123;isa = PBXBuildFile; fileRef = CB005D1B7C8E0A3D6341DB9D /* Pods_TestCocoaPods.framework */; &#125;;</span><br><span class="line"></span><br><span class="line">PBXFileReference section:</span><br><span class="line">105074B73663D0E4918F3F90 /* Pods-TestCocoaPods.release.xcconfig */ = &#123;isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = &quot;Pods-TestCocoaPods.release.xcconfig&quot;; path = &quot;Target Support Files/Pods-TestCocoaPods/Pods-TestCocoaPods.release.xcconfig&quot;; sourceTree = &quot;&lt;group&gt;&quot;; &#125;;</span><br><span class="line">60972A114A3E4366A5836A94 /* Pods-TestCocoaPods.debug.xcconfig */ = &#123;isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = &quot;Pods-TestCocoaPods.debug.xcconfig&quot;; path = &quot;Target Support Files/Pods-TestCocoaPods/Pods-TestCocoaPods.debug.xcconfig&quot;; sourceTree = &quot;&lt;group&gt;&quot;; &#125;;</span><br><span class="line">CB005D1B7C8E0A3D6341DB9D /* Pods_TestCocoaPods.framework */ = &#123;isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_TestCocoaPods.framework; sourceTree = BUILT_PRODUCTS_DIR; &#125;;</span><br><span class="line"></span><br><span class="line">PBXFrameworksBuildPhase:</span><br><span class="line">files = (</span><br><span class="line">        E01C29225DD71613589489FA /* Pods_TestCocoaPods.framework in Frameworks */,</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line">PBXGroup:</span><br><span class="line">22AD612E85507BD42F801917 /* Frameworks */ = &#123;</span><br><span class="line">        isa = PBXGroup;</span><br><span class="line">        children = (</span><br><span class="line">                CB005D1B7C8E0A3D6341DB9D /* Pods_TestCocoaPods.framework */,</span><br><span class="line">        );</span><br><span class="line">        name = Frameworks;</span><br><span class="line">        sourceTree = &quot;&lt;group&gt;&quot;;</span><br><span class="line">&#125;;</span><br><span class="line">563D16002378227800AFB290 = &#123;</span><br><span class="line">        isa = PBXGroup;</span><br><span class="line">        children = (</span><br><span class="line">                C7867C96DA44D37863BEC94B /* Pods */,</span><br><span class="line">                22AD612E85507BD42F801917 /* Frameworks */,</span><br><span class="line">        );</span><br><span class="line">        sourceTree = &quot;&lt;group&gt;&quot;;</span><br><span class="line">&#125;;</span><br><span class="line">C7867C96DA44D37863BEC94B /* Pods */ = &#123;</span><br><span class="line">        isa = PBXGroup;</span><br><span class="line">        children = (</span><br><span class="line">                60972A114A3E4366A5836A94 /* Pods-TestCocoaPods.debug.xcconfig */,</span><br><span class="line">                105074B73663D0E4918F3F90 /* Pods-TestCocoaPods.release.xcconfig */,</span><br><span class="line">        );</span><br><span class="line">        name = Pods;</span><br><span class="line">        path = Pods;</span><br><span class="line">        sourceTree = &quot;&lt;group&gt;&quot;;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">PBXNativeTarget:</span><br><span class="line">buildPhases = (</span><br><span class="line">        66B2CF8865E26539A7BF8BC7 /* [CP] Check Pods Manifest.lock */,</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line">PBXShellScriptBuildPhase:</span><br><span class="line">/* Begin PBXShellScriptBuildPhase section */</span><br><span class="line">        66B2CF8865E26539A7BF8BC7 /* [CP] Check Pods Manifest.lock */ = &#123;</span><br><span class="line">                isa = PBXShellScriptBuildPhase;</span><br><span class="line">                buildActionMask = 2147483647;</span><br><span class="line">                files = (</span><br><span class="line">                );</span><br><span class="line">                inputFileListPaths = (</span><br><span class="line">                );</span><br><span class="line">                inputPaths = (</span><br><span class="line">                        &quot;$&#123;PODS_PODFILE_DIR_PATH&#125;/Podfile.lock&quot;,</span><br><span class="line">                        &quot;$&#123;PODS_ROOT&#125;/Manifest.lock&quot;,</span><br><span class="line">                );</span><br><span class="line">                name = &quot;[CP] Check Pods Manifest.lock&quot;;</span><br><span class="line">                outputFileListPaths = (</span><br><span class="line">                );</span><br><span class="line">                outputPaths = (</span><br><span class="line">                        &quot;$(DERIVED_FILE_DIR)/Pods-TestCocoaPods-checkManifestLockResult.txt&quot;,</span><br><span class="line">                );</span><br><span class="line">                runOnlyForDeploymentPostprocessing = 0;</span><br><span class="line">                shellPath = /bin/sh;</span><br><span class="line">                shellScript = &quot;diff \&quot;$&#123;PODS_PODFILE_DIR_PATH&#125;/Podfile.lock\&quot; \&quot;$&#123;PODS_ROOT&#125;/Manifest.lock\&quot; &gt; /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \&quot;error: The sandbox is not in sync with the Podfile.lock. Run &apos;pod install&apos; or update your CocoaPods installation.\&quot; &gt;&amp;2\n    exit 1\nfi\n# This output is used by Xcode &apos;outputs&apos; to avoid re-running this script phase.\necho \&quot;SUCCESS\&quot; &gt; \&quot;$&#123;SCRIPT_OUTPUT_FILE_0&#125;\&quot;\n&quot;;</span><br><span class="line">                showEnvVarsInLog = 0;</span><br><span class="line">        &#125;;</span><br><span class="line">/* End PBXShellScriptBuildPhase section */</span><br><span class="line"></span><br><span class="line">XCBuildConfiguration:</span><br><span class="line">563D16232378227900AFB290 /* Debug */ = &#123;</span><br><span class="line">        baseConfigurationReference = 60972A114A3E4366A5836A94 /* Pods-TestCocoaPods.debug.xcconfig */;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>Target Support Files/Pods-TestCocoaPods/Pods-TestCocoaPods.debug.xcconfig:</strong><br>主要处理了 头文件路径，库路径，链接配置 </p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">FRAMEWORK_SEARCH_PATHS = $(inherited) &quot;$&#123;PODS_ROOT&#125;/AliColor&quot;</span><br><span class="line">GCC_PREPROCESSOR_DEFINITIONS = $(inherited) COCOAPODS=1</span><br><span class="line">LD_RUNPATH_SEARCH_PATHS = $(inherited) &apos;@executable_path/Frameworks&apos; &apos;@loader_path/Frameworks&apos;</span><br><span class="line">OTHER_LDFLAGS = $(inherited) -ObjC -framework &quot;AliColor&quot;</span><br><span class="line">PODS_BUILD_DIR = $&#123;BUILD_DIR&#125;</span><br><span class="line">PODS_CONFIGURATION_BUILD_DIR = $&#123;PODS_BUILD_DIR&#125;/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)</span><br><span class="line">PODS_PODFILE_DIR_PATH = $&#123;SRCROOT&#125;/.</span><br><span class="line">PODS_ROOT = $&#123;SRCROOT&#125;/Pods</span><br></pre></td></tr></table></figure>
+
+<p><strong>CocoaPods Framework 资源管理</strong><br>在Github找了MJRefresh,其里面包含了一些资源文件。<br>pod install 之后，build phase 中有 Pods-xxx-framework.sh 其中对资源文件做了处理</p>
+<p>主要的内容如下:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"># Use filter instead of exclude so missing patterns don&apos;t throw errors.</span><br><span class="line">echo &quot;rsync --delete -av &quot;$&#123;RSYNC_PROTECT_TMP_FILES[@]&#125;&quot; --filter \&quot;- CVS/\&quot; --filter \&quot;- .svn/\&quot; --filter \&quot;- .git/\&quot; --filter \&quot;- .hg/\&quot; --filter \&quot;- Headers\&quot; --filter \&quot;- PrivateHeaders\&quot; --filter \&quot;- Modules\&quot; \&quot;$&#123;source&#125;\&quot; \&quot;$&#123;destination&#125;\&quot;&quot;</span><br><span class="line">rsync --delete -av &quot;$&#123;RSYNC_PROTECT_TMP_FILES[@]&#125;&quot; --filter &quot;- CVS/&quot; --filter &quot;- .svn/&quot; --filter &quot;- .git/&quot; --filter &quot;- .hg/&quot; --filter &quot;- Headers&quot; --filter &quot;- PrivateHeaders&quot; --filter &quot;- Modules&quot; &quot;$&#123;source&#125;&quot; &quot;$&#123;destination&#125;&quot;</span><br><span class="line"># Strip invalid architectures so &quot;fat&quot; simulator / device frameworks work on device</span><br><span class="line">if [[ &quot;$(file &quot;$binary&quot;)&quot; == *&quot;dynamically linked shared library&quot;* ]]; then</span><br><span class="line">strip_invalid_archs &quot;$binary&quot;</span><br><span class="line">fi</span><br><span class="line"># Resign the code if required by the build settings to avoid unstable apps</span><br><span class="line">  code_sign_if_enabled &quot;$&#123;destination&#125;/$(basename &quot;$1&quot;)&quot;</span><br></pre></td></tr></table></figure>
+
+<p>Build 一下，看看Log，可以看到拷贝了资源文件</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">PhaseScriptExecution [CP]\ Embed\ Pods\ Frameworks /Users/xiejunyi/Library/Developer/Xcode/DerivedData/TestCocoaPods-emoajnwkneawvvazmpgriocqboko/Build/Intermediates.noindex/TestCocoaPods.build/Debug-iphonesimulator/TestCocoaPods.build/Script-2FE0977B29313E1B2691D262.sh (in target &apos;TestCocoaPods&apos; from project &apos;TestCocoaPods&apos;)</span><br><span class="line">    cd /Users/xiejunyi/Library/Mobile\ Documents/com~apple~CloudDocs/codes/Demos/TestCocoaPods</span><br><span class="line">    /bin/sh -c /Users/xiejunyi/Library/Developer/Xcode/DerivedData/TestCocoaPods-emoajnwkneawvvazmpgriocqboko/Build/Intermediates.noindex/TestCocoaPods.build/Debug-iphonesimulator/TestCocoaPods.build/Script-2FE0977B29313E1B2691D262.sh</span><br><span class="line"></span><br><span class="line">mkdir -p /Users/xiejunyi/Library/Developer/Xcode/DerivedData/TestCocoaPods-emoajnwkneawvvazmpgriocqboko/Build/Products/Debug-iphonesimulator/TestCocoaPods.app/Frameworks</span><br><span class="line">rsync --delete -av --filter P .*.?????? --filter &quot;- CVS/&quot; --filter &quot;- .svn/&quot; --filter &quot;- .git/&quot; --filter &quot;- .hg/&quot; --filter &quot;- Headers&quot; --filter &quot;- PrivateHeaders&quot; --filter &quot;- Modules&quot; &quot;/Users/xiejunyi/Library/Developer/Xcode/DerivedData/TestCocoaPods-emoajnwkneawvvazmpgriocqboko/Build/Products/Debug-iphonesimulator/MJRefresh/MJRefresh.framework&quot; &quot;/Users/xiejunyi/Library/Developer/Xcode/DerivedData/TestCocoaPods-emoajnwkneawvvazmpgriocqboko/Build/Products/Debug-iphonesimulator/TestCocoaPods.app/Frameworks&quot;</span><br><span class="line">building file list ... done</span><br><span class="line">MJRefresh.framework/</span><br><span class="line">MJRefresh.framework/Info.plist</span><br><span class="line">MJRefresh.framework/MJRefresh</span><br><span class="line">MJRefresh.framework/MJRefresh.bundle/</span><br><span class="line">MJRefresh.framework/MJRefresh.bundle/arrow@2x.png</span><br><span class="line">MJRefresh.framework/MJRefresh.bundle/en.lproj/</span><br><span class="line">MJRefresh.framework/MJRefresh.bundle/en.lproj/Localizable.strings</span><br><span class="line">MJRefresh.framework/MJRefresh.bundle/ko.lproj/</span><br><span class="line">MJRefresh.framework/MJRefresh.bundle/ko.lproj/Localizable.strings</span><br><span class="line">MJRefresh.framework/MJRefresh.bundle/zh-Hans.lproj/</span><br><span class="line">MJRefresh.framework/MJRefresh.bundle/zh-Hans.lproj/Localizable.strings</span><br><span class="line">MJRefresh.framework/MJRefresh.bundle/zh-Hant.lproj/</span><br><span class="line">MJRefresh.framework/MJRefresh.bundle/zh-Hant.lproj/Localizable.strings</span><br><span class="line">MJRefresh.framework/_CodeSignature/</span><br><span class="line">MJRefresh.framework/_CodeSignature/CodeResources</span><br><span class="line"></span><br><span class="line">sent 240510 bytes  received 238 bytes  481496.00 bytes/sec</span><br><span class="line">total size is 239605  speedup is 1.00</span><br><span class="line">Code Signing /Users/xiejunyi/Library/Developer/Xcode/DerivedData/TestCocoaPods-emoajnwkneawvvazmpgriocqboko/Build/Products/Debug-iphonesimulator/TestCocoaPods.app/Frameworks/MJRefresh.framework with Identity -</span><br><span class="line">/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements &apos;/Users/xiejunyi/Library/Developer/Xcode/DerivedData/TestCocoaPods-emoajnwkneawvvazmpgriocqboko/Build/Products/Debug-iphonesimulator/TestCocoaPods.app/Frameworks/MJRefresh.framework&apos;</span><br><span class="line">/Users/xiejunyi/Library/Developer/Xcode/DerivedData/TestCocoaPods-emoajnwkneawvvazmpgriocqboko/Build/Products/Debug-iphonesimulator/TestCocoaPods.app/Frameworks/MJRefresh.framework: replacing existing signature</span><br></pre></td></tr></table></figure>
+
+<p>以上基本涵盖了一个简单工程，CocoaPods进行的主要操作。</p>
+<h3 id="下一篇-CocoaPods插件开发原理-二-定制项目CocoaPods插件环境"><a href="#下一篇-CocoaPods插件开发原理-二-定制项目CocoaPods插件环境" class="headerlink" title="下一篇 CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境"></a>下一篇 CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</h3><h3 id="下一篇-CocoaPods插件开发原理-三-调试与开发CocoaPods插件"><a href="#下一篇-CocoaPods插件开发原理-三-调试与开发CocoaPods插件" class="headerlink" title="下一篇 CocoaPods插件开发原理(三) 调试与开发CocoaPods插件"></a>下一篇 CocoaPods插件开发原理(三) 调试与开发CocoaPods插件</h3>
+    </article>
+    <!-- license  -->
+    
+        <div class="license-wrapper">
+            <p>Author：<a href="http://yoursite.com">junyixie</a>
+            <p>原文链接：<a href="http://yoursite.com/2019/10/05/cocoapodsdev/">http://yoursite.com/2019/10/05/cocoapodsdev/</a>
+            <p>发表日期：<a href="http://yoursite.com/2019/10/05/cocoapodsdev/">October 5th 2019, 3:49:01 pm</a>
+            <p>更新日期：<a href="http://yoursite.com/2019/10/05/cocoapodsdev/">January 9th 2020, 12:18:36 am</a>
+            <p>版权声明：本文采用<a rel="license noopener" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>进行许可</p>
+        </div>
+    
+    <!-- paginator  -->
+    <ul class="post-paginator">
+        <li class="next">
+            
+                <div class="nextSlogan">Next Post</div>
+                <a href= "/2019/11/26/projectpodenv/" title= "CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境">
+                    <div class="nextTitle">CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</div>
+                </a>
+            
+        </li>
+        <li class="previous">
+            
+                <div class="prevSlogan">Previous Post</div>
+                <a href= "/2019/09/28/CrashMonitorSystem/" title= "崩溃捕获系统的原理（一）异常信号">
+                    <div class="prevTitle">崩溃捕获系统的原理（一）异常信号</div>
+                </a>
+            
+        </li>
+    </ul>
+    <!-- 评论插件 -->
+    <!-- 来必力City版安装代码 -->
+
+<!-- City版安装代码已完成 -->
+    
+    
+    <!-- gitalk评论 -->
+
+    <!-- utteranc评论 -->
+
+    <!-- partial('_partial/comment/changyan') -->
+    <!--PC版-->
+
+
+    
+    
+
+    <!-- 评论 -->
+</main>
+            <!-- profile -->
+            
+        </div>
+        <footer class="footer footer-unloaded">
+    <!-- social  -->
+    
+    <div class="social">
+        
+    
+        
+            
+                <a href="mailto:xie.junyi@outlook.com" target="_blank" rel="noopener" class="iconfont-archer email" title=email ></a>
+            
+        
+    
+        
+            
+                <a href="//github.com/junyixie" class="iconfont-archer github" target="_blank" title=github></a>
+            
+        
+    
+        
+            
+                <span class="iconfont-archer wechat" title=wechat>
+                  
+                  <img class="profile-qr" src="/assets/example_qr.png" />
+                </span>
+            
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+
+    </div>
+    
+    <!-- powered by Hexo  -->
+    <div class="copyright">
+        <span id="hexo-power">Powered by <a href="https://hexo.io/" target="_blank">Hexo</a></span><span class="iconfont-archer power">&#xe635;</span><span id="theme-info">theme <a href="https://github.com/fi3ework/hexo-theme-archer" target="_blank">Archer</a></span>
+    </div>
+    <!-- 不蒜子  -->
+    
+    <div class="busuanzi-container">
+    
+     
+    <span id="busuanzi_container_site_pv">PV: <span id="busuanzi_value_site_pv"></span> :)</span>
+    
+    </div>
+    
+</footer>
+    </div>
+    <!-- toc -->
+    
+    <div class="toc-wrapper" style=
+    
+
+
+
+
+
+
+
+top:50vh;
+
+    >
+        <div class="toc-catalog">
+            <span class="iconfont-archer catalog-icon">&#xe613;</span><span>CATALOG</span>
+        </div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#开发基础"><span class="toc-number">1.</span> <span class="toc-text">开发基础</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CocoaPods调试"><span class="toc-number">2.</span> <span class="toc-text">CocoaPods调试</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CocoaPods产物分析"><span class="toc-number">3.</span> <span class="toc-text">CocoaPods产物分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#下一篇-CocoaPods插件开发原理-二-定制项目CocoaPods插件环境"><span class="toc-number">3.1.</span> <span class="toc-text">下一篇 CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#下一篇-CocoaPods插件开发原理-三-调试与开发CocoaPods插件"><span class="toc-number">3.2.</span> <span class="toc-text">下一篇 CocoaPods插件开发原理(三) 调试与开发CocoaPods插件</span></a></li></ol></li></ol>
+    </div>
+    
+    <div class="back-top iconfont-archer">&#xe639;</div>
+    <div class="sidebar sidebar-hide">
+    <ul class="sidebar-tabs sidebar-tabs-active-0">
+        <li class="sidebar-tab-archives"><span class="iconfont-archer">&#xe67d;</span><span class="tab-name">Archive</span></li>
+        <li class="sidebar-tab-tags"><span class="iconfont-archer">&#xe61b;</span><span class="tab-name">Tag</span></li>
+        <li class="sidebar-tab-categories"><span class="iconfont-archer">&#xe666;</span><span class="tab-name">Cate</span></li>
+    </ul>
+    <div class="sidebar-content sidebar-content-show-archive">
+          <div class="sidebar-panel-archives">
+    <!-- 在ejs中将archive按照时间排序 -->
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <div class="total-and-search">
+        <div class="total-archive">
+        Total : 29
+        </div>
+        <!-- search  -->
+        
+    </div>
+    
+    <div class="post-archive">
+    
+    
+    
+    
+    <div class="archive-year"> 2020 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2020/10/05/cpythonstrip/" >cpython3.8瘦身到0.95mb</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2020/04/10/objcblockimp/" >imp_implementationWithBlock 的内部实现 trampoline</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/08</span><a class="archive-post-title" href= "/2020/04/08/lliread/" >lli源码阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/01</span><a class="archive-post-title" href= "/2020/04/01/MachOObjC/" >MachO（一） ObjC类结构的加载</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/25</span><a class="archive-post-title" href= "/2020/03/25/DobbyRead/" >Dobby源码学习（一） Inline Hook</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/19</span><a class="archive-post-title" href= "/2020/03/19/cocoapods-new-feature/" >cocoapods 新feature 开发 Example, On Demand Resource</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/04</span><a class="archive-post-title" href= "/2020/03/04/lazybind/" >dyld(2) lazy bind 和 dyld_stub_binder</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/03</span><a class="archive-post-title" href= "/2020/03/03/macholinkedit/" >dyld(1) MachO Linkedit 段</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/19</span><a class="archive-post-title" href= "/2020/02/19/crashruntimeinfo/" >Block ABI 文档阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/12</span><a class="archive-post-title" href= "/2020/02/12/iosdevdebug/" >iOS开发必备的问题定位调试技巧</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2019 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">11/26</span><a class="archive-post-title" href= "/2019/11/26/projectpodenv/" >CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2019/10/05/cocoapodsdev/" >CocoaPods插件开发原理(一) CocoaPods做了啥</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/28</span><a class="archive-post-title" href= "/2019/09/28/CrashMonitorSystem/" >崩溃捕获系统的原理（一）异常信号</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2018 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/30</span><a class="archive-post-title" href= "/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" >DWARF和符号化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/16</span><a class="archive-post-title" href= "/2018/09/16/CrashSymbolicateSystemDesign/" >APM Crash系统</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">06/13</span><a class="archive-post-title" href= "/2018/06/13/libmalloc/" >libmalloc "malloc" 探究</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/13</span><a class="archive-post-title" href= "/2018/04/13/dependency/" >关于架构和编码的思考</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2018/04/10/iosoom/" >iOS OOM</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2018/01/15/sharedlibraryandpic/" >fishhook与共享库和PIC</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2017 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/24</span><a class="archive-post-title" href= "/2017/12/24/In-depthUnderStandingOfThreadSafety/" >理解线程安全</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/04</span><a class="archive-post-title" href= "/2017/12/04/safeSwizzleRSSwizzleAnalyze/" >Method Swizzling 的正确途径</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/27</span><a class="archive-post-title" href= "/2017/10/27/dyld3withappstart/" >链接和App启动速度优化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/26</span><a class="archive-post-title" href= "/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/" >理解HTTPS</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">05/01</span><a class="archive-post-title" href= "/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/" >Objective-C 深入理解中的消息机制和方法调用</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/20</span><a class="archive-post-title" href= "/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" >Cocoa 深入理解KVO</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/06</span><a class="archive-post-title" href= "/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/" >理解 Objc Runtime</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/01</span><a class="archive-post-title" href= "/2017/02/01/Objective-C-weak-%E5%85%B3%E9%94%AE%E5%AD%97-%E5%AE%9E%E7%8E%B0-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Objective-C weak 关键字 实现 源码分析</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/24</span><a class="archive-post-title" href= "/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/" >iOS Core Animation性能调优 笔记</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2017/01/15/Aspects-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Aspects 源码分析</a>
+        </li>
+    
+    </div>
+  </div>
+        <div class="sidebar-panel-tags">
+    <div class="sidebar-tags-name">
+    
+    </div>
+    <div class="iconfont-archer sidebar-tags-empty">&#xe678;</div>
+    <div class="tag-load-fail" style="display: none; color: #ccc; font-size: 0.6rem;">
+    缺失模块。<br/>
+    1、请确保node版本大于6.2<br/>
+    2、在博客根目录（注意不是archer根目录）执行以下命令：<br/>
+    <span style="color: #f75357; font-size: 1rem; line-height: 2rem;">npm i hexo-generator-json-content --save</span><br/>
+    3、在根目录_config.yml里添加配置：
+    <pre style="color: #787878; font-size: 0.6rem;">
+jsonContent:
+  meta: false
+  pages: false
+  posts:
+    title: true
+    date: true
+    path: true
+    text: false
+    raw: false
+    content: false
+    slug: false
+    updated: false
+    comments: false
+    link: false
+    permalink: false
+    excerpt: false
+    categories: true
+    tags: true</pre>
+    </div> 
+    <div class="sidebar-tags-list"></div>
+</div>
+        <div class="sidebar-panel-categories">
+    <div class="sidebar-categories-name">
+    
+        <span class="sidebar-category-name" data-categories="iOS"><span class="iconfont-archer">&#xe60a;</span>iOS</span>
+    
+        <span class="sidebar-category-name" data-categories="源码分析"><span class="iconfont-archer">&#xe60a;</span>源码分析</span>
+    
+        <span class="sidebar-category-name" data-categories="APM"><span class="iconfont-archer">&#xe60a;</span>APM</span>
+    
+        <span class="sidebar-category-name" data-categories="设计架构"><span class="iconfont-archer">&#xe60a;</span>设计架构</span>
+    
+        <span class="sidebar-category-name" data-categories="研发流程"><span class="iconfont-archer">&#xe60a;</span>研发流程</span>
+    
+        <span class="sidebar-category-name" data-categories="Hook"><span class="iconfont-archer">&#xe60a;</span>Hook</span>
+    
+    </div>
+    <div class="iconfont-archer sidebar-categories-empty">&#xe678;</div>
+    <div class="sidebar-categories-list"></div>
+</div>
+    </div>
+</div> 
+    <script>
+    var siteMeta = {
+        root: "/",
+        author: "junyixie"
+    }
+</script>
+    <!-- CDN failover -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+    <script type="text/javascript">
+        if (typeof window.$ === 'undefined')
+        {
+            console.warn('jquery load from jsdelivr failed, will load local script')
+            document.write('<script src="/lib/jquery.min.js">\x3C/script>')
+        }
+    </script>
+    <script src="/scripts/main.js"></script>
+    <!-- algolia -->
+    
+    <!-- busuanzi  -->
+    
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    
+    <!-- CNZZ  -->
+    
+    </div>
+    <!-- async load share.js -->
+    
+        <script src="/scripts/share.js" async></script>    
+     
+    </body>
+</html>
+
+

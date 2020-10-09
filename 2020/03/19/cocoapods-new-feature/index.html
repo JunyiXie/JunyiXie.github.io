@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="en">
+    <!-- title -->
+
+
+
+
+<!-- keywords -->
+
+
+
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" >
+    <meta name="author" content="junyixie">
+    <meta name="renderer" content="webkit">
+    <meta name="copyright" content="junyixie">
+    
+    <meta name="keywords" content="hexo,hexo-theme,hexo-blog,blog,谢俊逸">
+    
+    <meta name="description" content="">
+    <meta name="description" content="2016年 苹果提出了On Demand Resource这一特性。目的在于下载游戏等资源减少包大小。不过CocoaPods尚未对该特性进行支持，这导致我们不能在Pod中使用On Demand Resource。对于组件化开发的app来说，没有这一功能的支持，基本无法使用On Demand Resource。 因此针对CocoaPods开发了在 podspec 中 定义 on_demand_res">
+<meta property="og:type" content="article">
+<meta property="og:title" content="cocoapods 新feature 开发 Example, On Demand Resource">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;03&#x2F;19&#x2F;cocoapods-new-feature&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="2016年 苹果提出了On Demand Resource这一特性。目的在于下载游戏等资源减少包大小。不过CocoaPods尚未对该特性进行支持，这导致我们不能在Pod中使用On Demand Resource。对于组件化开发的app来说，没有这一功能的支持，基本无法使用On Demand Resource。 因此针对CocoaPods开发了在 podspec 中 定义 on_demand_res">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2020-03-19T13:07:54.986Z">
+<meta name="twitter:card" content="summary">
+    <meta http-equiv="Cache-control" content="no-cache">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    
+    <title>cocoapods 新feature 开发 Example, On Demand Resource · xiejunyi,谢俊逸</title>
+    <style type="text/css">
+    @font-face {
+        font-family: 'Oswald-Regular';
+        src: url("/font/Oswald-Regular.ttf");
+    }
+
+    body {
+        margin: 0;
+    }
+
+    header,
+    footer,
+    .back-top,
+    .sidebar,
+    .container,
+    .site-intro-meta,
+    .toc-wrapper {
+        display: none;
+    }
+
+    .site-intro {
+        position: relative;
+        z-index: 3;
+        width: 100%;
+        /* height: 50vh; */
+        overflow: hidden;
+    }
+
+    .site-intro-placeholder {
+        position: absolute;
+        z-index: -2;
+        top: 0;
+        left: 0;
+        width: calc(100% + 300px);
+        height: 100%;
+        background: repeating-linear-gradient(-45deg, #444 0, #444 80px, #333 80px, #333 160px);
+        background-position: center center;
+        transform: translate3d(-226px, 0, 0);
+        animation: gradient-move 2.5s ease-out 0s infinite;
+    }
+
+    @keyframes gradient-move {
+        0% {
+            transform: translate3d(-226px, 0, 0);
+        }
+        100% {
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+</style>
+
+    <link rel="preload" href= "/css/style.css?v=20180824" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    <link rel="stylesheet" href= "/css/mobile.css?v=20180824" media="(max-width: 980px)">
+    
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    
+    <!-- /*! loadCSS. [c]2017 Filament Group, Inc. MIT License */
+/* This file is meant as a standalone workflow for
+- testing support for link[rel=preload]
+- enabling async CSS loading in browsers that do not support rel=preload
+- applying rel preload css once loaded, whether supported or not.
+*/ -->
+<script>
+(function( w ){
+	"use strict";
+	// rel=preload support test
+	if( !w.loadCSS ){
+		w.loadCSS = function(){};
+	}
+	// define on the loadCSS obj
+	var rp = loadCSS.relpreload = {};
+	// rel=preload feature support test
+	// runs once and returns a function for compat purposes
+	rp.support = (function(){
+		var ret;
+		try {
+			ret = w.document.createElement( "link" ).relList.supports( "preload" );
+		} catch (e) {
+			ret = false;
+		}
+		return function(){
+			return ret;
+		};
+	})();
+
+	// if preload isn't supported, get an asynchronous load by using a non-matching media attribute
+	// then change that media back to its intended value on load
+	rp.bindMediaToggle = function( link ){
+		// remember existing media attr for ultimate state, or default to 'all'
+		var finalMedia = link.media || "all";
+
+		function enableStylesheet(){
+			link.media = finalMedia;
+		}
+
+		// bind load handlers to enable media
+		if( link.addEventListener ){
+			link.addEventListener( "load", enableStylesheet );
+		} else if( link.attachEvent ){
+			link.attachEvent( "onload", enableStylesheet );
+		}
+
+		// Set rel and non-applicable media type to start an async request
+		// note: timeout allows this to happen async to let rendering continue in IE
+		setTimeout(function(){
+			link.rel = "stylesheet";
+			link.media = "only x";
+		});
+		// also enable media after 3 seconds,
+		// which will catch very old browsers (android 2.x, old firefox) that don't support onload on link
+		setTimeout( enableStylesheet, 3000 );
+	};
+
+	// loop through link elements in DOM
+	rp.poly = function(){
+		// double check this to prevent external calls from running
+		if( rp.support() ){
+			return;
+		}
+		var links = w.document.getElementsByTagName( "link" );
+		for( var i = 0; i < links.length; i++ ){
+			var link = links[ i ];
+			// qualify links to those with rel=preload and as=style attrs
+			if( link.rel === "preload" && link.getAttribute( "as" ) === "style" && !link.getAttribute( "data-loadcss" ) ){
+				// prevent rerunning on link
+				link.setAttribute( "data-loadcss", true );
+				// bind listeners to toggle media back
+				rp.bindMediaToggle( link );
+			}
+		}
+	};
+
+	// if unsupported, run the polyfill
+	if( !rp.support() ){
+		// run once at least
+		rp.poly();
+
+		// rerun poly on an interval until onload
+		var run = w.setInterval( rp.poly, 500 );
+		if( w.addEventListener ){
+			w.addEventListener( "load", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		} else if( w.attachEvent ){
+			w.attachEvent( "onload", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		}
+	}
+
+
+	// commonjs
+	if( typeof exports !== "undefined" ){
+		exports.loadCSS = loadCSS;
+	}
+	else {
+		w.loadCSS = loadCSS;
+	}
+}( typeof global !== "undefined" ? global : this ) );
+</script>
+
+    <link rel="icon" href= "/assets/favicon.ico" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js" as="script" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js" as="script" />
+    <link rel="preload" href="/scripts/main.js" as="script" />
+    <link rel="preload" as="font" href="/font/Oswald-Regular.ttf" crossorigin>
+    <link rel="preload" as="font" href="https://at.alicdn.com/t/font_327081_1dta1rlogw17zaor.woff" crossorigin>
+    
+    <!-- fancybox -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.js" defer></script>
+    <!-- 百度统计  -->
+    
+    <!-- 谷歌统计  -->
+    
+</head>
+
+    
+        <body class="post-body">
+    
+    
+<header class="header">
+
+    <div class="read-progress"></div>
+    <div class="header-sidebar-menu">&#xe775;</div>
+    <!-- post页的toggle banner  -->
+    
+    <div class="banner">
+            <div class="blog-title">
+                <a href="/" >xiejunyi&#39;s blog.</a>
+            </div>
+            <div class="post-title">
+                <a href="#" class="post-name">cocoapods 新feature 开发 Example, On Demand Resource</a>
+            </div>
+    </div>
+    
+    <a class="home-link" href=/>xiejunyi's blog.</a>
+</header>
+    <div class="wrapper">
+        <div class="site-intro" style="
+
+
+
+
+
+
+
+height:50vh;
+">
+    
+    <!-- 主页  -->
+    
+    
+    <!-- 404页  -->
+            
+    <div class="site-intro-placeholder"></div>
+    <div class="site-intro-img" style="background-image: url(/intro/post-bg.jpg)"></div>
+    <div class="site-intro-meta">
+        <!-- 标题  -->
+        <h1 class="intro-title">
+            <!-- 主页  -->
+            
+            cocoapods 新feature 开发 Example, On Demand Resource
+            <!-- 404 -->
+            
+        </h1>
+        <!-- 副标题 -->
+        <p class="intro-subtitle">
+            <!-- 主页副标题  -->
+            
+            
+            <!-- 404 -->
+            
+        </p>
+        <!-- 文章页meta -->
+        
+            <div class="post-intros">
+                <!-- 文章页标签  -->
+                
+                
+                    <div class="post-intro-read">
+                        <span>Word count: <span class="post-count word-count">1.1k</span>Reading time: <span class="post-count reading-time">5 min</span></span>
+                    </div>
+                
+                <div class="post-intro-meta">
+                    <span class="post-intro-calander iconfont-archer">&#xe676;</span>
+                    <span class="post-intro-time">2020/03/19</span>
+                    
+                    <span id="busuanzi_container_page_pv" class="busuanzi-pv">
+                        <span class="iconfont-archer">&#xe602;</span>
+                        <span id="busuanzi_value_page_pv"></span>
+                    </span>
+                    
+                    <span class="shareWrapper">
+                        <span class="iconfont-archer shareIcon">&#xe71d;</span>
+                        <span class="shareText">Share</span>
+                        <ul class="shareList">
+                            <li class="iconfont-archer share-qr" data-type="qr">&#xe75b;
+                                <div class="share-qrcode"></div>
+                            </li>
+                            <li class="iconfont-archer" data-type="weibo">&#xe619;</li>
+                            <li class="iconfont-archer" data-type="qzone">&#xe62e;</li>
+                            <li class="iconfont-archer" data-type="twitter">&#xe634;</li>
+                            <li class="iconfont-archer" data-type="facebook">&#xe67a;</li>
+                        </ul>
+                    </span>
+                </div>
+            </div>
+        
+    </div>
+</div>
+        <script>
+ 
+  // get user agent
+  var browser = {
+    versions: function () {
+      var u = window.navigator.userAgent;
+      return {
+        userAgent: u,
+        trident: u.indexOf('Trident') > -1, //IE内核
+        presto: u.indexOf('Presto') > -1, //opera内核
+        webKit: u.indexOf('AppleWebKit') > -1, //苹果、谷歌内核
+        gecko: u.indexOf('Gecko') > -1 && u.indexOf('KHTML') == -1, //火狐内核
+        mobile: !!u.match(/AppleWebKit.*Mobile.*/), //是否为移动终端
+        ios: !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/), //ios终端
+        android: u.indexOf('Android') > -1 || u.indexOf('Linux') > -1, //android终端或者uc浏览器
+        iPhone: u.indexOf('iPhone') > -1 || u.indexOf('Mac') > -1, //是否为iPhone或者安卓QQ浏览器
+        iPad: u.indexOf('iPad') > -1, //是否为iPad
+        webApp: u.indexOf('Safari') == -1, //是否为web应用程序，没有头部与底部
+        weixin: u.indexOf('MicroMessenger') == -1, //是否为微信浏览器
+        uc: u.indexOf('UCBrowser') > -1 //是否为android下的UC浏览器
+      };
+    }()
+  }
+  console.log("userAgent:" + browser.versions.userAgent);
+
+  // callback
+  function fontLoaded() {
+    console.log('font loaded');
+    if (document.getElementsByClassName('site-intro-meta')) {
+      document.getElementsByClassName('intro-title')[0].classList.add('intro-fade-in');
+      document.getElementsByClassName('intro-subtitle')[0].classList.add('intro-fade-in');
+      var postIntros = document.getElementsByClassName('post-intros')[0]
+      if (postIntros) {
+        postIntros.classList.add('post-fade-in');
+      }
+    }
+  }
+
+  // UC不支持跨域，所以直接显示
+  function asyncCb(){
+    if (browser.versions.uc) {
+      console.log("UCBrowser");
+      fontLoaded();
+    } else {
+      WebFont.load({
+        custom: {
+          families: ['Oswald-Regular']
+        },
+        loading: function () {  //所有字体开始加载
+          // console.log('loading');
+        },
+        active: function () {  //所有字体已渲染
+          fontLoaded();
+        },
+        inactive: function () { //字体预加载失败，无效字体或浏览器不支持加载
+          console.log('inactive: timeout');
+          fontLoaded();
+        },
+        timeout: 5000 // Set the timeout to two seconds
+      });
+    }
+  }
+
+  function asyncErr(){
+    console.warn('script load from CDN failed, will load local script')
+  }
+
+  // load webfont-loader async, and add callback function
+  function async(u, cb, err) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (cb) { o.addEventListener('load', function (e) { cb(null, e); }, false); }
+    if (err) { o.addEventListener('error', function (e) { err(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+
+  var asyncLoadWithFallBack = function(arr, success, reject) {
+      var currReject = function(){
+        reject()
+        arr.shift()
+        if(arr.length)
+          async(arr[0], success, currReject)
+        }
+
+      async(arr[0], success, currReject)
+  }
+
+  asyncLoadWithFallBack([
+    "https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js", 
+    "https://cdn.bootcss.com/webfont/1.6.28/webfontloader.js",
+    "/lib/webfontloader.min.js"
+  ], asyncCb, asyncErr)
+</script>        
+        <img class="loading" src="/assets/loading.svg" style="display: block; margin: 6rem auto 0 auto; width: 6rem; height: 6rem;" />
+        <div class="container container-unloaded">
+            <main class="main post-page">
+    <article class="article-entry">
+        <p>2016年 苹果提出了On Demand Resource这一特性。目的在于下载游戏等资源减少包大小。<br>不过CocoaPods尚未对该特性进行支持，这导致我们不能在Pod中使用On Demand Resource。对于组件化开发的app来说，没有这一功能的支持，基本无法使用On Demand Resource。</p>
+<p>因此针对CocoaPods开发了在 podspec 中 定义 on_demand_resources 字段，支持pod仓库使用On Demand Resource。</p>
+<p>例如这样</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">s.on_demand_resources  = [<span class="string">"Fuck"</span>, <span class="string">"You"</span>]</span><br></pre></td></tr></table></figure>
+
+<h2 id="Feature-实现思路"><a href="#Feature-实现思路" class="headerlink" title="Feature 实现思路"></a>Feature 实现思路</h2><p>我们做的操作就是 用代码实现 在Xcode 中手动添加 On Demand Resource 的效果。</p>
+<ol>
+<li>拖一个文件进工程</li>
+<li>在Resource Tag 设置中添加该文件</li>
+</ol>
+<p>通过git diff, 我们可以发现对Xcode工程文件的改动在于：</p>
+<ol>
+<li>添加文件 PBXBuildFile PBXFileReference ，并打上tag</li>
+<li>新增 project 的 KnownAssetTags Attributed</li>
+<li>添加 该文件到 ResourcesBuildPhase</li>
+</ol>
+<p>我们只需要操作CocoaPods帮我们完成这些就搞定。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Begin PBXBuildFile section */</span></span><br><span class="line"><span class="number">569293632420B</span>FAA00E13D4A <span class="comment">/* R1 in Resources */</span> = &#123;isa = PBXBuildFile; fileRef = <span class="number">569293622420B</span>FAA00E13D4A <span class="comment">/* R1 */</span>; settings = &#123;ASSET_TAGS = (OnDemand, ); &#125;; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* Begin PBXFileReference section */</span></span><br><span class="line"><span class="number">569293622420B</span>FAA00E13D4A <span class="comment">/* R1 */</span> = &#123;isa = PBXFileReference; fileEncoding = <span class="number">4</span>; lastKnownFileType = <span class="built_in">text</span>; path = R1; sourceTree = <span class="string">"&lt;group&gt;"</span>; &#125;;</span><br><span class="line">A927A3B416DCDE828F76E9A4 <span class="comment">/* fuck */</span> = &#123;isa = PBXFileReference; includeInIndex = <span class="number">1</span>; lastKnownFileType = <span class="built_in">text</span>; name = fuck; path = <span class="string">"../../CocoaPodsTestLibrary-master/fuck"</span>; sourceTree = <span class="string">"&lt;group&gt;"</span>; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* Begin PBXProject section */</span></span><br><span class="line">	<span class="number">5692933E2420</span>BEDF00E13D4A <span class="comment">/* Project object */</span> = &#123;</span><br><span class="line">		isa = PBXProject;</span><br><span class="line">		attributes = &#123;</span><br><span class="line">			KnownAssetTags = (</span><br><span class="line">				OnDemand,</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="comment">/* Begin PBXResourcesBuildPhase section */</span></span><br><span class="line">	<span class="number">569293442420B</span>EDF00E13D4A <span class="comment">/* Resources */</span> = &#123;</span><br><span class="line">		isa = PBXResourcesBuildPhase;</span><br><span class="line">		buildActionMask = <span class="number">2147483647</span>;</span><br><span class="line">		files = (</span><br><span class="line">			<span class="number">569293632420B</span>FAA00E13D4A <span class="comment">/* R1 in Resources */</span>,</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><p>哈哈 像我这种Command Copy Paste 高手，做需求靠抄就行了。<br>首先确定要抄什么！ </p>
+<ul>
+<li>on_demand_resources 的 语法看起来和 resources 有点像。。 podspec 的 dsl 就抄他怎么实现的。抄他！</li>
+<li>文件添加到工程和 cocoapods将 xcconfig 添加到工程里比较像，抄他！！</li>
+<li>文件添加到build phase 并且打标签 和 添加资源文件比较像，抄他！！！</li>
+</ul>
+<p>一般iOS开发基本不会熟悉CocoaPods的源码，又是Ruby写的… 如何调试看一下我以前的文章。如何分析调试工程也参考我之前的文章。</p>
+<h3 id="新增Podspec-DSL"><a href="#新增Podspec-DSL" class="headerlink" title="新增Podspec DSL"></a>新增Podspec DSL</h3><p>我找了一个类似新增podspec语法的 pull request, 大致知道了新增语法该该什么。</p>
+<ol>
+<li>dsl.rb </li>
+<li>linter.rb </li>
+<li>specification.rb </li>
+</ol>
+<p>首先要定位到CocoaPods中对 podspec 的处理流程，我直接写个错误的语法，通过报错的调用栈定位到了位置。</p>
+<p>发现CocoaPods 将 Podspec中的内容 当作Ruby代码去执行 (ruby 的 eval)。知道了这个，就很容易摸清楚 podspec dsl 如何实现的了, 可以直接调试。通过调试，发现dsl的定义在 Core/lib/specification/dsl.rb中定义的。OK照葫芦画瓢，复制粘贴一下 resource 的 抄上…</p>
+<p>dsl 定义</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># @!method on_demand_resources=(on_demand_resources)</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   A list of on_demand_resources that should be copied into the target bundle.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   <span class="doctag">@example</span></span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#     spec.on_demand_resources = 'Resources/HockeySDK.bundle'</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   <span class="doctag">@example</span></span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#     spec.on_demand_resources = ['Images/*.png', 'Sounds/*']</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   <span class="doctag">@param</span>  [String, Array&lt;String&gt;] resources</span></span><br><span class="line"><span class="comment">#           The on_demand_resources shipped with the Pod.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line">attribute <span class="symbol">:on_demand_resources</span>,</span><br><span class="line">          <span class="symbol">:container</span>     =&gt; Array,</span><br><span class="line">          <span class="symbol">:file_patterns</span> =&gt; <span class="literal">true</span>,</span><br><span class="line">          <span class="symbol">:singularize</span>   =&gt; <span class="literal">true</span></span><br></pre></td></tr></table></figure>
+
+<p>podspec 数据消费和lint</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># <span class="doctag">@return</span> [Array&lt;String&gt;] A hash where the key represents the</span></span><br><span class="line"><span class="comment">#         paths of the on_demand_resources to copy and the values the paths of</span></span><br><span class="line"><span class="comment">#         the on_demand_resources that should be copied.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line">spec_attr_accessor <span class="symbol">:on_demand_resources</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Performs validations related to the `on_demand_resources` attribute.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">_validate_on_demand_resources</span><span class="params">(on_demand_resource)</span></span></span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="添加-On-Demand-Resource-文件"><a href="#添加-On-Demand-Resource-文件" class="headerlink" title="添加 On Demand Resource 文件"></a>添加 On Demand Resource 文件</h3><p>哎，通过调试，找到了 cocoapods 集成Pods 到 Xcode Target 的关键文件。<code>lib/cocoapods/installer/user_project_integrator/target_integrator.rb</code>。 之后的操作又是通过调试和代码分析找到类似的功能如何实现，去理解CocoaPods的整个架构，再来实现我们的功能。<br>CocoaPods的设计确实十分优秀，改的很爽。</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Integrates the targets of the user projects with the on demand resources</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@return</span> [void]</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">add_on_demand_resources</span></span></span><br><span class="line">    attributes = target.user_project.root_object.attributes</span><br><span class="line">    asset_tags = (attributes[<span class="string">"KnownAssetTags"</span>] <span class="params">||</span>= [])</span><br><span class="line"></span><br><span class="line">    <span class="keyword">unless</span> asset_tags.<span class="keyword">include</span>?(<span class="string">"OnDemand"</span>)</span><br><span class="line">    asset_tags &lt;&lt; <span class="string">"OnDemand"</span></span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    attributes[<span class="string">"KnownAssetTags"</span>] = asset_tags</span><br><span class="line">    target.user_project.root_object.attributes = attributes</span><br><span class="line"></span><br><span class="line">    on_demand_resources_group = target.user_project.main_group[<span class="string">"on_demand_resources"</span>]</span><br><span class="line">    <span class="keyword">unless</span> on_demand_resources_group</span><br><span class="line">    on_demand_resources_group = target.user_project.main_group.new_group(<span class="string">"on_demand_resources"</span>, target.sandbox.root)</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    pb_target = target.user_project.objects_by_uuid[target.user_target_uuids[<span class="number">0</span>]]</span><br><span class="line"></span><br><span class="line">    old_on_demand_resource_file_refs = on_demand_resources_group.files</span><br><span class="line">    pb_target.remove_on_demand_resources(old_on_demand_resource_file_refs)</span><br><span class="line">    on_demand_resources_group.clear</span><br><span class="line"></span><br><span class="line">    on_demand_resource_file_refs = []</span><br><span class="line"></span><br><span class="line">    target.pod_targets.each <span class="keyword">do</span> <span class="params">|pod_target|</span></span><br><span class="line">    pod_target.file_accessors.each &#123;<span class="params">|file_accessor|</span></span><br><span class="line">        file_accessor.on_demand_resources.each &#123;<span class="params">|on_demand_resource|</span></span><br><span class="line">        on_demand_resource_pathname = Pathname.new(File.expand_path(on_demand_resource))</span><br><span class="line"></span><br><span class="line">        file_ref = on_demand_resources_group.files.find &#123;<span class="params">|file|</span> file.real_path == on_demand_resource_pathname&#125;</span><br><span class="line">        <span class="keyword">unless</span> file_ref</span><br><span class="line">            file_ref = on_demand_resources_group.new_file(on_demand_resource)</span><br><span class="line">            on_demand_resource_file_refs &lt;&lt; file_ref</span><br><span class="line">        <span class="keyword">end</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    pb_target.add_on_demand_resources(on_demand_resource_file_refs)</span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<p><code>lib/xcodeproj/project/object/native_target.rb</code></p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># remove on demand resource files to the resources build phase of the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@param</span>  [Array&lt;PBXFileReference&gt;] on_demand_resource_file_references</span></span><br><span class="line"><span class="comment">#         the files references of the on demand resources to the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@return</span> [void]</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">remove_on_demand_resources</span><span class="params">(on_demand_resource_file_references)</span></span></span><br><span class="line">    on_demand_resource_file_references.each <span class="keyword">do</span> <span class="params">|file|</span></span><br><span class="line">    resources_build_phase.remove_file_reference(file)</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Adds on demand resource files to the resources build phase of the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@param</span>  [Array&lt;PBXFileReference&gt;] on_demand_resource_file_references</span></span><br><span class="line"><span class="comment">#         the files references of the on demand resources to the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@return</span> [void]</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">add_on_demand_resources</span><span class="params">(on_demand_resource_file_references)</span></span></span><br><span class="line">    on_demand_resource_file_references.each <span class="keyword">do</span> <span class="params">|file|</span></span><br><span class="line">    <span class="keyword">next</span> <span class="keyword">if</span> resources_build_phase.<span class="keyword">include</span>?(file)</span><br><span class="line">    build_file = project.new(PBXBuildFile)</span><br><span class="line">    build_file.file_ref = file</span><br><span class="line">    build_file.settings = (build_file.settings <span class="params">||</span>= &#123;&#125;).merge(&#123;<span class="string">"ASSET_TAGS"</span> =&gt; [<span class="string">"OnDemand"</span>]&#125;)</span><br><span class="line">    resources_build_phase.files &lt;&lt; build_file</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="分析阅读CocoaPods源码的几个关键名词"><a href="#分析阅读CocoaPods源码的几个关键名词" class="headerlink" title="分析阅读CocoaPods源码的几个关键名词"></a>分析阅读CocoaPods源码的几个关键名词</h3><p>PodTarget pod的target<br>AggregateTarget 需要集成pod的项目的target，例如我们app的target<br>Sandbox CocoaPods对于 我们Pods 和 工程的 沙盒文件处理<br>DSL podfile podspec中定义的语法<br>defind_method CocoaPods 通过动态生成方法的方式，处理简单的语法</p>
+
+    </article>
+    <!-- license  -->
+    
+        <div class="license-wrapper">
+            <p>Author：<a href="http://yoursite.com">junyixie</a>
+            <p>原文链接：<a href="http://yoursite.com/2020/03/19/cocoapods-new-feature/">http://yoursite.com/2020/03/19/cocoapods-new-feature/</a>
+            <p>发表日期：<a href="http://yoursite.com/2020/03/19/cocoapods-new-feature/">March 19th 2020, 8:21:19 pm</a>
+            <p>更新日期：<a href="http://yoursite.com/2020/03/19/cocoapods-new-feature/">March 19th 2020, 9:07:54 pm</a>
+            <p>版权声明：本文采用<a rel="license noopener" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>进行许可</p>
+        </div>
+    
+    <!-- paginator  -->
+    <ul class="post-paginator">
+        <li class="next">
+            
+                <div class="nextSlogan">Next Post</div>
+                <a href= "/2020/03/25/DobbyRead/" title= "Dobby源码学习（一） Inline Hook">
+                    <div class="nextTitle">Dobby源码学习（一） Inline Hook</div>
+                </a>
+            
+        </li>
+        <li class="previous">
+            
+                <div class="prevSlogan">Previous Post</div>
+                <a href= "/2020/03/04/lazybind/" title= "dyld(2) lazy bind 和 dyld_stub_binder">
+                    <div class="prevTitle">dyld(2) lazy bind 和 dyld_stub_binder</div>
+                </a>
+            
+        </li>
+    </ul>
+    <!-- 评论插件 -->
+    <!-- 来必力City版安装代码 -->
+
+<!-- City版安装代码已完成 -->
+    
+    
+    <!-- gitalk评论 -->
+
+    <!-- utteranc评论 -->
+
+    <!-- partial('_partial/comment/changyan') -->
+    <!--PC版-->
+
+
+    
+    
+
+    <!-- 评论 -->
+</main>
+            <!-- profile -->
+            
+        </div>
+        <footer class="footer footer-unloaded">
+    <!-- social  -->
+    
+    <div class="social">
+        
+    
+        
+            
+                <a href="mailto:xie.junyi@outlook.com" target="_blank" rel="noopener" class="iconfont-archer email" title=email ></a>
+            
+        
+    
+        
+            
+                <a href="//github.com/junyixie" class="iconfont-archer github" target="_blank" title=github></a>
+            
+        
+    
+        
+            
+                <span class="iconfont-archer wechat" title=wechat>
+                  
+                  <img class="profile-qr" src="/assets/example_qr.png" />
+                </span>
+            
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+
+    </div>
+    
+    <!-- powered by Hexo  -->
+    <div class="copyright">
+        <span id="hexo-power">Powered by <a href="https://hexo.io/" target="_blank">Hexo</a></span><span class="iconfont-archer power">&#xe635;</span><span id="theme-info">theme <a href="https://github.com/fi3ework/hexo-theme-archer" target="_blank">Archer</a></span>
+    </div>
+    <!-- 不蒜子  -->
+    
+    <div class="busuanzi-container">
+    
+     
+    <span id="busuanzi_container_site_pv">PV: <span id="busuanzi_value_site_pv"></span> :)</span>
+    
+    </div>
+    
+</footer>
+    </div>
+    <!-- toc -->
+    
+    <div class="toc-wrapper" style=
+    
+
+
+
+
+
+
+
+top:50vh;
+
+    >
+        <div class="toc-catalog">
+            <span class="iconfont-archer catalog-icon">&#xe613;</span><span>CATALOG</span>
+        </div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Feature-实现思路"><span class="toc-number">1.</span> <span class="toc-text">Feature 实现思路</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#实现"><span class="toc-number">2.</span> <span class="toc-text">实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#新增Podspec-DSL"><span class="toc-number">2.1.</span> <span class="toc-text">新增Podspec DSL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#添加-On-Demand-Resource-文件"><span class="toc-number">2.2.</span> <span class="toc-text">添加 On Demand Resource 文件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#分析阅读CocoaPods源码的几个关键名词"><span class="toc-number">2.3.</span> <span class="toc-text">分析阅读CocoaPods源码的几个关键名词</span></a></li></ol></li></ol>
+    </div>
+    
+    <div class="back-top iconfont-archer">&#xe639;</div>
+    <div class="sidebar sidebar-hide">
+    <ul class="sidebar-tabs sidebar-tabs-active-0">
+        <li class="sidebar-tab-archives"><span class="iconfont-archer">&#xe67d;</span><span class="tab-name">Archive</span></li>
+        <li class="sidebar-tab-tags"><span class="iconfont-archer">&#xe61b;</span><span class="tab-name">Tag</span></li>
+        <li class="sidebar-tab-categories"><span class="iconfont-archer">&#xe666;</span><span class="tab-name">Cate</span></li>
+    </ul>
+    <div class="sidebar-content sidebar-content-show-archive">
+          <div class="sidebar-panel-archives">
+    <!-- 在ejs中将archive按照时间排序 -->
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <div class="total-and-search">
+        <div class="total-archive">
+        Total : 29
+        </div>
+        <!-- search  -->
+        
+    </div>
+    
+    <div class="post-archive">
+    
+    
+    
+    
+    <div class="archive-year"> 2020 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2020/10/05/cpythonstrip/" >cpython3.8瘦身到0.95mb</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2020/04/10/objcblockimp/" >imp_implementationWithBlock 的内部实现 trampoline</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/08</span><a class="archive-post-title" href= "/2020/04/08/lliread/" >lli源码阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/01</span><a class="archive-post-title" href= "/2020/04/01/MachOObjC/" >MachO（一） ObjC类结构的加载</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/25</span><a class="archive-post-title" href= "/2020/03/25/DobbyRead/" >Dobby源码学习（一） Inline Hook</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/19</span><a class="archive-post-title" href= "/2020/03/19/cocoapods-new-feature/" >cocoapods 新feature 开发 Example, On Demand Resource</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/04</span><a class="archive-post-title" href= "/2020/03/04/lazybind/" >dyld(2) lazy bind 和 dyld_stub_binder</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/03</span><a class="archive-post-title" href= "/2020/03/03/macholinkedit/" >dyld(1) MachO Linkedit 段</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/19</span><a class="archive-post-title" href= "/2020/02/19/crashruntimeinfo/" >Block ABI 文档阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/12</span><a class="archive-post-title" href= "/2020/02/12/iosdevdebug/" >iOS开发必备的问题定位调试技巧</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2019 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">11/26</span><a class="archive-post-title" href= "/2019/11/26/projectpodenv/" >CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2019/10/05/cocoapodsdev/" >CocoaPods插件开发原理(一) CocoaPods做了啥</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/28</span><a class="archive-post-title" href= "/2019/09/28/CrashMonitorSystem/" >崩溃捕获系统的原理（一）异常信号</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2018 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/30</span><a class="archive-post-title" href= "/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" >DWARF和符号化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/16</span><a class="archive-post-title" href= "/2018/09/16/CrashSymbolicateSystemDesign/" >APM Crash系统</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">06/13</span><a class="archive-post-title" href= "/2018/06/13/libmalloc/" >libmalloc "malloc" 探究</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/13</span><a class="archive-post-title" href= "/2018/04/13/dependency/" >关于架构和编码的思考</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2018/04/10/iosoom/" >iOS OOM</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2018/01/15/sharedlibraryandpic/" >fishhook与共享库和PIC</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2017 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/24</span><a class="archive-post-title" href= "/2017/12/24/In-depthUnderStandingOfThreadSafety/" >理解线程安全</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/04</span><a class="archive-post-title" href= "/2017/12/04/safeSwizzleRSSwizzleAnalyze/" >Method Swizzling 的正确途径</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/27</span><a class="archive-post-title" href= "/2017/10/27/dyld3withappstart/" >链接和App启动速度优化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/26</span><a class="archive-post-title" href= "/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/" >理解HTTPS</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">05/01</span><a class="archive-post-title" href= "/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/" >Objective-C 深入理解中的消息机制和方法调用</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/20</span><a class="archive-post-title" href= "/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" >Cocoa 深入理解KVO</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/06</span><a class="archive-post-title" href= "/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/" >理解 Objc Runtime</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/01</span><a class="archive-post-title" href= "/2017/02/01/Objective-C-weak-%E5%85%B3%E9%94%AE%E5%AD%97-%E5%AE%9E%E7%8E%B0-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Objective-C weak 关键字 实现 源码分析</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/24</span><a class="archive-post-title" href= "/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/" >iOS Core Animation性能调优 笔记</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2017/01/15/Aspects-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Aspects 源码分析</a>
+        </li>
+    
+    </div>
+  </div>
+        <div class="sidebar-panel-tags">
+    <div class="sidebar-tags-name">
+    
+    </div>
+    <div class="iconfont-archer sidebar-tags-empty">&#xe678;</div>
+    <div class="tag-load-fail" style="display: none; color: #ccc; font-size: 0.6rem;">
+    缺失模块。<br/>
+    1、请确保node版本大于6.2<br/>
+    2、在博客根目录（注意不是archer根目录）执行以下命令：<br/>
+    <span style="color: #f75357; font-size: 1rem; line-height: 2rem;">npm i hexo-generator-json-content --save</span><br/>
+    3、在根目录_config.yml里添加配置：
+    <pre style="color: #787878; font-size: 0.6rem;">
+jsonContent:
+  meta: false
+  pages: false
+  posts:
+    title: true
+    date: true
+    path: true
+    text: false
+    raw: false
+    content: false
+    slug: false
+    updated: false
+    comments: false
+    link: false
+    permalink: false
+    excerpt: false
+    categories: true
+    tags: true</pre>
+    </div> 
+    <div class="sidebar-tags-list"></div>
+</div>
+        <div class="sidebar-panel-categories">
+    <div class="sidebar-categories-name">
+    
+        <span class="sidebar-category-name" data-categories="iOS"><span class="iconfont-archer">&#xe60a;</span>iOS</span>
+    
+        <span class="sidebar-category-name" data-categories="源码分析"><span class="iconfont-archer">&#xe60a;</span>源码分析</span>
+    
+        <span class="sidebar-category-name" data-categories="APM"><span class="iconfont-archer">&#xe60a;</span>APM</span>
+    
+        <span class="sidebar-category-name" data-categories="设计架构"><span class="iconfont-archer">&#xe60a;</span>设计架构</span>
+    
+        <span class="sidebar-category-name" data-categories="研发流程"><span class="iconfont-archer">&#xe60a;</span>研发流程</span>
+    
+        <span class="sidebar-category-name" data-categories="Hook"><span class="iconfont-archer">&#xe60a;</span>Hook</span>
+    
+    </div>
+    <div class="iconfont-archer sidebar-categories-empty">&#xe678;</div>
+    <div class="sidebar-categories-list"></div>
+</div>
+    </div>
+</div> 
+    <script>
+    var siteMeta = {
+        root: "/",
+        author: "junyixie"
+    }
+</script>
+    <!-- CDN failover -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+    <script type="text/javascript">
+        if (typeof window.$ === 'undefined')
+        {
+            console.warn('jquery load from jsdelivr failed, will load local script')
+            document.write('<script src="/lib/jquery.min.js">\x3C/script>')
+        }
+    </script>
+    <script src="/scripts/main.js"></script>
+    <!-- algolia -->
+    
+    <!-- busuanzi  -->
+    
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    
+    <!-- CNZZ  -->
+    
+    </div>
+    <!-- async load share.js -->
+    
+        <script src="/scripts/share.js" async></script>    
+     
+    </body>
+</html>
+
+

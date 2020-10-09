@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+    <!-- title -->
+
+
+
+
+<!-- keywords -->
+
+
+
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" >
+    <meta name="author" content="junyixie">
+    <meta name="renderer" content="webkit">
+    <meta name="copyright" content="junyixie">
+    
+    <meta name="keywords" content="hexo,hexo-theme,hexo-blog,blog,谢俊逸">
+    
+    <meta name="description" content="">
+    <meta name="description" content="之前在头条搞了端监控，比较有意思的部分是Crash捕获，持续做了1年。开源的Crash捕获框架KSCrash,PLCrashReporter 都值得一看。当然也存在各自的问题。这边博客主要简单讲一下Mach系统的异常处理模型。 Crash捕获下面是Crash捕获处理系统几个核心的关键领域知识。感兴趣的可以自行了解一下，每一部分都值得研究，弄明白了 系统的异常处理机制，Dynamic Image,">
+<meta property="og:type" content="article">
+<meta property="og:title" content="崩溃捕获系统的原理（一）异常信号">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;09&#x2F;28&#x2F;CrashMonitorSystem&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="之前在头条搞了端监控，比较有意思的部分是Crash捕获，持续做了1年。开源的Crash捕获框架KSCrash,PLCrashReporter 都值得一看。当然也存在各自的问题。这边博客主要简单讲一下Mach系统的异常处理模型。 Crash捕获下面是Crash捕获处理系统几个核心的关键领域知识。感兴趣的可以自行了解一下，每一部分都值得研究，弄明白了 系统的异常处理机制，Dynamic Image,">
+<meta property="og:locale" content="en">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;09&#x2F;28&#x2F;CrashMonitorSystem&#x2F;process.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;09&#x2F;28&#x2F;CrashMonitorSystem&#x2F;exception_triage.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;09&#x2F;28&#x2F;CrashMonitorSystem&#x2F;hardware_mach.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;09&#x2F;28&#x2F;CrashMonitorSystem&#x2F;kill.png">
+<meta property="og:updated_time" content="2019-11-26T15:52:59.023Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;09&#x2F;28&#x2F;CrashMonitorSystem&#x2F;process.png">
+    <meta http-equiv="Cache-control" content="no-cache">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    
+    <title>崩溃捕获系统的原理（一）异常信号 · xiejunyi,谢俊逸</title>
+    <style type="text/css">
+    @font-face {
+        font-family: 'Oswald-Regular';
+        src: url("/font/Oswald-Regular.ttf");
+    }
+
+    body {
+        margin: 0;
+    }
+
+    header,
+    footer,
+    .back-top,
+    .sidebar,
+    .container,
+    .site-intro-meta,
+    .toc-wrapper {
+        display: none;
+    }
+
+    .site-intro {
+        position: relative;
+        z-index: 3;
+        width: 100%;
+        /* height: 50vh; */
+        overflow: hidden;
+    }
+
+    .site-intro-placeholder {
+        position: absolute;
+        z-index: -2;
+        top: 0;
+        left: 0;
+        width: calc(100% + 300px);
+        height: 100%;
+        background: repeating-linear-gradient(-45deg, #444 0, #444 80px, #333 80px, #333 160px);
+        background-position: center center;
+        transform: translate3d(-226px, 0, 0);
+        animation: gradient-move 2.5s ease-out 0s infinite;
+    }
+
+    @keyframes gradient-move {
+        0% {
+            transform: translate3d(-226px, 0, 0);
+        }
+        100% {
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+</style>
+
+    <link rel="preload" href= "/css/style.css?v=20180824" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    <link rel="stylesheet" href= "/css/mobile.css?v=20180824" media="(max-width: 980px)">
+    
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    
+    <!-- /*! loadCSS. [c]2017 Filament Group, Inc. MIT License */
+/* This file is meant as a standalone workflow for
+- testing support for link[rel=preload]
+- enabling async CSS loading in browsers that do not support rel=preload
+- applying rel preload css once loaded, whether supported or not.
+*/ -->
+<script>
+(function( w ){
+	"use strict";
+	// rel=preload support test
+	if( !w.loadCSS ){
+		w.loadCSS = function(){};
+	}
+	// define on the loadCSS obj
+	var rp = loadCSS.relpreload = {};
+	// rel=preload feature support test
+	// runs once and returns a function for compat purposes
+	rp.support = (function(){
+		var ret;
+		try {
+			ret = w.document.createElement( "link" ).relList.supports( "preload" );
+		} catch (e) {
+			ret = false;
+		}
+		return function(){
+			return ret;
+		};
+	})();
+
+	// if preload isn't supported, get an asynchronous load by using a non-matching media attribute
+	// then change that media back to its intended value on load
+	rp.bindMediaToggle = function( link ){
+		// remember existing media attr for ultimate state, or default to 'all'
+		var finalMedia = link.media || "all";
+
+		function enableStylesheet(){
+			link.media = finalMedia;
+		}
+
+		// bind load handlers to enable media
+		if( link.addEventListener ){
+			link.addEventListener( "load", enableStylesheet );
+		} else if( link.attachEvent ){
+			link.attachEvent( "onload", enableStylesheet );
+		}
+
+		// Set rel and non-applicable media type to start an async request
+		// note: timeout allows this to happen async to let rendering continue in IE
+		setTimeout(function(){
+			link.rel = "stylesheet";
+			link.media = "only x";
+		});
+		// also enable media after 3 seconds,
+		// which will catch very old browsers (android 2.x, old firefox) that don't support onload on link
+		setTimeout( enableStylesheet, 3000 );
+	};
+
+	// loop through link elements in DOM
+	rp.poly = function(){
+		// double check this to prevent external calls from running
+		if( rp.support() ){
+			return;
+		}
+		var links = w.document.getElementsByTagName( "link" );
+		for( var i = 0; i < links.length; i++ ){
+			var link = links[ i ];
+			// qualify links to those with rel=preload and as=style attrs
+			if( link.rel === "preload" && link.getAttribute( "as" ) === "style" && !link.getAttribute( "data-loadcss" ) ){
+				// prevent rerunning on link
+				link.setAttribute( "data-loadcss", true );
+				// bind listeners to toggle media back
+				rp.bindMediaToggle( link );
+			}
+		}
+	};
+
+	// if unsupported, run the polyfill
+	if( !rp.support() ){
+		// run once at least
+		rp.poly();
+
+		// rerun poly on an interval until onload
+		var run = w.setInterval( rp.poly, 500 );
+		if( w.addEventListener ){
+			w.addEventListener( "load", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		} else if( w.attachEvent ){
+			w.attachEvent( "onload", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		}
+	}
+
+
+	// commonjs
+	if( typeof exports !== "undefined" ){
+		exports.loadCSS = loadCSS;
+	}
+	else {
+		w.loadCSS = loadCSS;
+	}
+}( typeof global !== "undefined" ? global : this ) );
+</script>
+
+    <link rel="icon" href= "/assets/favicon.ico" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js" as="script" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js" as="script" />
+    <link rel="preload" href="/scripts/main.js" as="script" />
+    <link rel="preload" as="font" href="/font/Oswald-Regular.ttf" crossorigin>
+    <link rel="preload" as="font" href="https://at.alicdn.com/t/font_327081_1dta1rlogw17zaor.woff" crossorigin>
+    
+    <!-- fancybox -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.js" defer></script>
+    <!-- 百度统计  -->
+    
+    <!-- 谷歌统计  -->
+    
+</head>
+
+    
+        <body class="post-body">
+    
+    
+<header class="header">
+
+    <div class="read-progress"></div>
+    <div class="header-sidebar-menu">&#xe775;</div>
+    <!-- post页的toggle banner  -->
+    
+    <div class="banner">
+            <div class="blog-title">
+                <a href="/" >xiejunyi&#39;s blog.</a>
+            </div>
+            <div class="post-title">
+                <a href="#" class="post-name">崩溃捕获系统的原理（一）异常信号</a>
+            </div>
+    </div>
+    
+    <a class="home-link" href=/>xiejunyi's blog.</a>
+</header>
+    <div class="wrapper">
+        <div class="site-intro" style="
+
+
+
+
+
+
+
+height:50vh;
+">
+    
+    <!-- 主页  -->
+    
+    
+    <!-- 404页  -->
+            
+    <div class="site-intro-placeholder"></div>
+    <div class="site-intro-img" style="background-image: url(/intro/post-bg.jpg)"></div>
+    <div class="site-intro-meta">
+        <!-- 标题  -->
+        <h1 class="intro-title">
+            <!-- 主页  -->
+            
+            崩溃捕获系统的原理（一）异常信号
+            <!-- 404 -->
+            
+        </h1>
+        <!-- 副标题 -->
+        <p class="intro-subtitle">
+            <!-- 主页副标题  -->
+            
+            
+            <!-- 404 -->
+            
+        </p>
+        <!-- 文章页meta -->
+        
+            <div class="post-intros">
+                <!-- 文章页标签  -->
+                
+                
+                    <div class="post-intro-read">
+                        <span>Word count: <span class="post-count word-count">1.3k</span>Reading time: <span class="post-count reading-time">6 min</span></span>
+                    </div>
+                
+                <div class="post-intro-meta">
+                    <span class="post-intro-calander iconfont-archer">&#xe676;</span>
+                    <span class="post-intro-time">2019/09/28</span>
+                    
+                    <span id="busuanzi_container_page_pv" class="busuanzi-pv">
+                        <span class="iconfont-archer">&#xe602;</span>
+                        <span id="busuanzi_value_page_pv"></span>
+                    </span>
+                    
+                    <span class="shareWrapper">
+                        <span class="iconfont-archer shareIcon">&#xe71d;</span>
+                        <span class="shareText">Share</span>
+                        <ul class="shareList">
+                            <li class="iconfont-archer share-qr" data-type="qr">&#xe75b;
+                                <div class="share-qrcode"></div>
+                            </li>
+                            <li class="iconfont-archer" data-type="weibo">&#xe619;</li>
+                            <li class="iconfont-archer" data-type="qzone">&#xe62e;</li>
+                            <li class="iconfont-archer" data-type="twitter">&#xe634;</li>
+                            <li class="iconfont-archer" data-type="facebook">&#xe67a;</li>
+                        </ul>
+                    </span>
+                </div>
+            </div>
+        
+    </div>
+</div>
+        <script>
+ 
+  // get user agent
+  var browser = {
+    versions: function () {
+      var u = window.navigator.userAgent;
+      return {
+        userAgent: u,
+        trident: u.indexOf('Trident') > -1, //IE内核
+        presto: u.indexOf('Presto') > -1, //opera内核
+        webKit: u.indexOf('AppleWebKit') > -1, //苹果、谷歌内核
+        gecko: u.indexOf('Gecko') > -1 && u.indexOf('KHTML') == -1, //火狐内核
+        mobile: !!u.match(/AppleWebKit.*Mobile.*/), //是否为移动终端
+        ios: !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/), //ios终端
+        android: u.indexOf('Android') > -1 || u.indexOf('Linux') > -1, //android终端或者uc浏览器
+        iPhone: u.indexOf('iPhone') > -1 || u.indexOf('Mac') > -1, //是否为iPhone或者安卓QQ浏览器
+        iPad: u.indexOf('iPad') > -1, //是否为iPad
+        webApp: u.indexOf('Safari') == -1, //是否为web应用程序，没有头部与底部
+        weixin: u.indexOf('MicroMessenger') == -1, //是否为微信浏览器
+        uc: u.indexOf('UCBrowser') > -1 //是否为android下的UC浏览器
+      };
+    }()
+  }
+  console.log("userAgent:" + browser.versions.userAgent);
+
+  // callback
+  function fontLoaded() {
+    console.log('font loaded');
+    if (document.getElementsByClassName('site-intro-meta')) {
+      document.getElementsByClassName('intro-title')[0].classList.add('intro-fade-in');
+      document.getElementsByClassName('intro-subtitle')[0].classList.add('intro-fade-in');
+      var postIntros = document.getElementsByClassName('post-intros')[0]
+      if (postIntros) {
+        postIntros.classList.add('post-fade-in');
+      }
+    }
+  }
+
+  // UC不支持跨域，所以直接显示
+  function asyncCb(){
+    if (browser.versions.uc) {
+      console.log("UCBrowser");
+      fontLoaded();
+    } else {
+      WebFont.load({
+        custom: {
+          families: ['Oswald-Regular']
+        },
+        loading: function () {  //所有字体开始加载
+          // console.log('loading');
+        },
+        active: function () {  //所有字体已渲染
+          fontLoaded();
+        },
+        inactive: function () { //字体预加载失败，无效字体或浏览器不支持加载
+          console.log('inactive: timeout');
+          fontLoaded();
+        },
+        timeout: 5000 // Set the timeout to two seconds
+      });
+    }
+  }
+
+  function asyncErr(){
+    console.warn('script load from CDN failed, will load local script')
+  }
+
+  // load webfont-loader async, and add callback function
+  function async(u, cb, err) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (cb) { o.addEventListener('load', function (e) { cb(null, e); }, false); }
+    if (err) { o.addEventListener('error', function (e) { err(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+
+  var asyncLoadWithFallBack = function(arr, success, reject) {
+      var currReject = function(){
+        reject()
+        arr.shift()
+        if(arr.length)
+          async(arr[0], success, currReject)
+        }
+
+      async(arr[0], success, currReject)
+  }
+
+  asyncLoadWithFallBack([
+    "https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js", 
+    "https://cdn.bootcss.com/webfont/1.6.28/webfontloader.js",
+    "/lib/webfontloader.min.js"
+  ], asyncCb, asyncErr)
+</script>        
+        <img class="loading" src="/assets/loading.svg" style="display: block; margin: 6rem auto 0 auto; width: 6rem; height: 6rem;" />
+        <div class="container container-unloaded">
+            <main class="main post-page">
+    <article class="article-entry">
+        <p>之前在头条搞了端监控，比较有意思的部分是Crash捕获，持续做了1年。开源的Crash捕获框架KSCrash,PLCrashReporter 都值得一看。当然也存在各自的问题。这边博客主要简单讲一下Mach系统的异常处理模型。</p>
+<h2 id="Crash捕获"><a href="#Crash捕获" class="headerlink" title="Crash捕获"></a>Crash捕获</h2><p>下面是Crash捕获处理系统几个核心的关键领域知识。感兴趣的可以自行了解一下，每一部分都值得研究，弄明白了 系统的异常处理机制，Dynamic Image, Thread Context，可以加深对iOS底层工作原理的理解。</p>
+<ul>
+<li>UNIX signals 信号</li>
+<li>Mach Exceptions Mach异常</li>
+<li>Basic Thread details 线程现场信息</li>
+<li>Binary image information 动态库信息</li>
+<li>Frame pointer-based stack traces 基于fp的callstack回溯</li>
+<li>Compact Unwind support 辅助callstack回溯的 Compact Unwind信息</li>
+</ul>
+<p><strong>本片主要介绍的是异常和信号的处理。</strong><br>具体代码怎么抓 Mach / Signal Exception 可以看看开源的 KSCrash 和 PLCrashReporter.</p>
+<h2 id="异常处理流程"><a href="#异常处理流程" class="headerlink" title="异常处理流程"></a>异常处理流程</h2><ul>
+<li>Mach异常模型</li>
+<li>Mach异常和Signal的转换</li>
+<li>软件异常</li>
+<li>硬件异常触发流程</li>
+<li>系统是怎么抓的crash? 为什么都是 EXC_CRASH 类型？</li>
+</ul>
+<p>首先要明确几个概念及其之间的联系：<code>硬件异常</code>, <code>软件异常</code>,<code>mach异常</code>, <code>Signal异常</code>。这四种异常概念，自底向上构建了iOS系统的异常处理模型。</p>
+<p>其之间的关系如下</p>
+<img src="/2019/09/28/CrashMonitorSystem/process.png" class="" title="process.png">
+
+<h3 id="Mach异常模型"><a href="#Mach异常模型" class="headerlink" title="Mach异常模型"></a>Mach异常模型</h3><p>基于 mach message 机制, 可以</p>
+<ul>
+<li>通过注册端口监听异常消息<ul>
+<li>可以为 host, task, thread 注册异常处理端口。(例如：小程序注册thread 级别的处理，然后自己处理异常。)</li>
+</ul>
+</li>
+<li>发送异常消息</li>
+</ul>
+<p>mach异常信号的来源，可以看到通过两种途径：</p>
+<ul>
+<li>硬件级别的触发异常</li>
+<li>proc退出时会触发异常(EXC_CRASH)。</li>
+</ul>
+<img src="/2019/09/28/CrashMonitorSystem/exception_triage.png" class="" title="exception_triage.png">
+
+
+<h3 id="Mach异常和Signal的转换"><a href="#Mach异常和Signal的转换" class="headerlink" title="Mach异常和Signal的转换"></a>Mach异常和Signal的转换</h3><p>Mach异常如果不处理，默认会转化为Signal异常。<br>内核注册了host-level的exception handler，负责将mach异常转换为对应的Signal信号。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Called with kernel funnel held */</span></span><br><span class="line"><span class="keyword">void</span></span><br><span class="line">bsdinit_task(<span class="keyword">void</span>)</span><br><span class="line">&#123;</span><br><span class="line">	<span class="keyword">proc_t</span> p = current_proc();</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">uthread</span> *<span class="title">ut</span>;</span></span><br><span class="line">	<span class="keyword">thread_t</span> thread;</span><br><span class="line"></span><br><span class="line">	process_name(<span class="string">"init"</span>, p);</span><br><span class="line"></span><br><span class="line">	ux_handler_init();</span><br><span class="line"></span><br><span class="line">	thread = current_thread();</span><br><span class="line">	(<span class="keyword">void</span>) host_set_exception_ports(host_priv_self(),</span><br><span class="line">					EXC_MASK_ALL &amp; ~(EXC_MASK_RPC_ALERT),<span class="comment">//pilotfish (shark) needs this port</span></span><br><span class="line">					(<span class="keyword">mach_port_t</span>) ux_exception_port,</span><br><span class="line">					EXCEPTION_DEFAULT| MACH_EXCEPTION_CODES,</span><br><span class="line">					<span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">	ut = (<span class="keyword">uthread_t</span>)get_bsdthread_info(thread);</span><br><span class="line"></span><br><span class="line">	bsd_init_task = get_threadtask(thread);</span><br><span class="line">	init_task_failure_data[<span class="number">0</span>] = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">if</span> CONFIG_MACF</span></span><br><span class="line">	mac_cred_label_associate_user(p-&gt;p_ucred);</span><br><span class="line">	mac_task_label_update_cred (p-&gt;p_ucred, (struct task *) p-&gt;task);</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">	load_init_program(p);</span><br><span class="line">	lock_trace = <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="硬件异常触发流程"><a href="#硬件异常触发流程" class="headerlink" title="硬件异常触发流程"></a>硬件异常触发流程</h3><img src="/2019/09/28/CrashMonitorSystem/hardware_mach.png" class="" title="hardware_mach.png">
+<p>硬件异常会转化为Mach异常</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span></span><br><span class="line">i386_exception(</span><br><span class="line">	<span class="keyword">int</span>	exc,</span><br><span class="line">	<span class="keyword">mach_exception_code_t</span> code,</span><br><span class="line">	<span class="keyword">mach_exception_subcode_t</span> subcode)</span><br><span class="line">&#123;</span><br><span class="line">	<span class="keyword">mach_exception_data_type_t</span>   codes[EXCEPTION_CODE_MAX];</span><br><span class="line"></span><br><span class="line">	DEBUG_KPRINT_SYSCALL_MACH(<span class="string">"i386_exception: exc=%d code=0x%llx subcode=0x%llx\n"</span>,</span><br><span class="line">							  exc, code, subcode);</span><br><span class="line">	codes[<span class="number">0</span>] = code;		<span class="comment">/* new exception interface */</span></span><br><span class="line">	codes[<span class="number">1</span>] = subcode;</span><br><span class="line">	exception_triage(exc, codes, <span class="number">2</span>);</span><br><span class="line">	<span class="comment">/*NOTREACHED*/</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span></span><br><span class="line">exception_triage(</span><br><span class="line">	<span class="keyword">exception_type_t</span>	exception,</span><br><span class="line">	<span class="keyword">mach_exception_data_t</span>	code,</span><br><span class="line">	<span class="keyword">mach_msg_type_number_t</span>  codeCnt)</span><br><span class="line">&#123;</span><br><span class="line">	<span class="keyword">thread_t</span>		thread;</span><br><span class="line">	<span class="keyword">task_t</span>			task;</span><br><span class="line">	<span class="keyword">host_priv_t</span>		host_priv;</span><br><span class="line">	<span class="keyword">lck_mtx_t</span>		*mutex;</span><br><span class="line">	<span class="keyword">kern_return_t</span>	kr;</span><br><span class="line"></span><br><span class="line">	assert(exception != EXC_RPC_ALERT);</span><br><span class="line"></span><br><span class="line">	thread = current_thread();</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Try to raise the exception at the activation level.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	mutex = &amp;thread-&gt;mutex;</span><br><span class="line">	kr = exception_deliver(thread, exception, code, codeCnt, thread-&gt;exc_actions, mutex);</span><br><span class="line">	<span class="keyword">if</span> (kr == KERN_SUCCESS || kr == MACH_RCV_PORT_DIED)</span><br><span class="line">		<span class="keyword">goto</span> out;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Maybe the task level will handle it.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	task = current_task();</span><br><span class="line">	mutex = &amp;task-&gt;lock;</span><br><span class="line">	kr = exception_deliver(thread, exception, code, codeCnt, task-&gt;exc_actions, mutex);</span><br><span class="line">	<span class="keyword">if</span> (kr == KERN_SUCCESS || kr == MACH_RCV_PORT_DIED)</span><br><span class="line">		<span class="keyword">goto</span> out;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * How about at the host level?</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	host_priv = host_priv_self();</span><br><span class="line">	mutex = &amp;host_priv-&gt;lock;</span><br><span class="line">	kr = exception_deliver(thread, exception, code, codeCnt, host_priv-&gt;exc_actions, mutex);</span><br><span class="line">	<span class="keyword">if</span> (kr == KERN_SUCCESS || kr == MACH_RCV_PORT_DIED)</span><br><span class="line">		<span class="keyword">goto</span> out;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Nobody handled it, terminate the task.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line"></span><br><span class="line">	(<span class="keyword">void</span>) task_terminate(task);</span><br><span class="line"></span><br><span class="line">out:</span><br><span class="line">	<span class="keyword">if</span> ((exception != EXC_CRASH) &amp;&amp; (exception != EXC_RESOURCE) &amp;&amp;</span><br><span class="line">	    (exception != EXC_GUARD))</span><br><span class="line">		thread_exception_return();</span><br><span class="line">	<span class="keyword">return</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<h3 id="软件异常"><a href="#软件异常" class="headerlink" title="软件异常"></a>软件异常</h3><p>通过kill() 直接抛出signal异常(软件)<br>处理流程如下图所示：</p>
+<img src="/2019/09/28/CrashMonitorSystem/kill.png" class="" title="kill.png">
+
+
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line">__private_extern__ <span class="keyword">void</span></span><br><span class="line">__abort()</span><br><span class="line">&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">sigaction</span> <span class="title">act</span>;</span></span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (!CRGetCrashLogMessage())</span><br><span class="line">		CRSetCrashLogMessage(<span class="string">"__abort() called"</span>);</span><br><span class="line">	act.sa_handler = SIG_DFL;</span><br><span class="line">	act.sa_flags = <span class="number">0</span>;</span><br><span class="line">	sigfillset(&amp;act.sa_mask);</span><br><span class="line">	(<span class="keyword">void</span>)_sigaction(SIGABRT, &amp;act, <span class="literal">NULL</span>);</span><br><span class="line">	sigdelset(&amp;act.sa_mask, SIGABRT);</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* &lt;rdar://problem/7397932&gt; abort() should call pthread_kill to deliver a signal to the aborting thread </span></span><br><span class="line"><span class="comment">	 * This helps gdb focus on the thread calling abort()</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="keyword">if</span> (__is_threaded) &#123;</span><br><span class="line">	    <span class="comment">/* Block all signals on all other threads */</span></span><br><span class="line">	    <span class="keyword">sigset_t</span> fullmask;</span><br><span class="line">	    sigfillset(&amp;fullmask);</span><br><span class="line">	    (<span class="keyword">void</span>)_sigprocmask(SIG_SETMASK, &amp;fullmask, <span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">	    <span class="comment">/* &lt;rdar://problem/8400096&gt; Set the workqueue killable */</span></span><br><span class="line">	    __pthread_workqueue_setkill(<span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">	    (<span class="keyword">void</span>)pthread_sigmask(SIG_SETMASK, &amp;act.sa_mask, <span class="literal">NULL</span>);</span><br><span class="line">	    (<span class="keyword">void</span>)pthread_kill(pthread_self(), SIGABRT);</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">	    (<span class="keyword">void</span>)_sigprocmask(SIG_SETMASK, &amp;act.sa_mask, <span class="literal">NULL</span>);</span><br><span class="line">	    (<span class="keyword">void</span>)kill(getpid(), SIGABRT);</span><br><span class="line">	&#125;</span><br><span class="line">	usleep(TIMEOUT); <span class="comment">/* give time for signal to happen */</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">/* If for some reason SIGABRT was not delivered, we exit using __builtin_trap</span></span><br><span class="line"><span class="comment">	 * which generates an illegal instruction on i386: &lt;rdar://problem/8400958&gt;</span></span><br><span class="line"><span class="comment">	 * and SIGTRAP on arm.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	sigfillset(&amp;act.sa_mask);</span><br><span class="line">	sigdelset(&amp;act.sa_mask, SIGILL);</span><br><span class="line">	sigdelset(&amp;act.sa_mask, SIGTRAP);</span><br><span class="line">	(<span class="keyword">void</span>)_sigprocmask(SIG_SETMASK, &amp;act.sa_mask, <span class="literal">NULL</span>);</span><br><span class="line">	__builtin_trap();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="系统是怎么抓的crash-为什么都是-EXC-CRASH-类型？"><a href="#系统是怎么抓的crash-为什么都是-EXC-CRASH-类型？" class="headerlink" title="系统是怎么抓的crash? 为什么都是 EXC_CRASH 类型？"></a>系统是怎么抓的crash? 为什么都是 EXC_CRASH 类型？</h3><p>系统通过launchd监听了EXC_CRASH。<br>EXC_CRASH 是一种特殊类型，囊括硬件和软件异常，什么都能抓。但是需要out-of-process 处理。(信号发出的时候，进程已经跪了)<br>看进程退出逻辑，EXC_CRASH 基本上会囊括所有的崩溃类型。软硬件异常都会转化为Signal信号。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span></span><br><span class="line">proc_prepareexit(<span class="keyword">proc_t</span> p, <span class="keyword">int</span> rv, <span class="keyword">boolean_t</span> perf_notify) </span><br><span class="line">&#123;</span><br><span class="line">	<span class="keyword">mach_exception_data_type_t</span> code, subcode;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">uthread</span> *<span class="title">ut</span>;</span></span><br><span class="line">	<span class="keyword">thread_t</span> self = current_thread();</span><br><span class="line">	ut = get_bsdthread_info(self);</span><br><span class="line"></span><br><span class="line"> 	<span class="comment">/* If a core should be generated, notify crash reporter */</span></span><br><span class="line">	<span class="keyword">if</span> (hassigprop(WTERMSIG(rv), SA_CORE) || ((p-&gt;p_csflags &amp; CS_KILLED) != <span class="number">0</span>)) &#123;</span><br><span class="line">		<span class="comment">/* </span></span><br><span class="line"><span class="comment">		 * Workaround for processes checking up on PT_DENY_ATTACH:</span></span><br><span class="line"><span class="comment">		 * should be backed out post-Leopard (details in 5431025).</span></span><br><span class="line"><span class="comment">		 */</span></span><br><span class="line">		<span class="keyword">if</span> ((SIGSEGV == WTERMSIG(rv)) &amp;&amp; </span><br><span class="line">				(p-&gt;p_pptr-&gt;p_lflag &amp; P_LNOATTACH)) &#123;</span><br><span class="line">			<span class="keyword">goto</span> skipcheck;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="comment">/*</span></span><br><span class="line"><span class="comment">		 * Crash Reporter looks for the signal value, original exception</span></span><br><span class="line"><span class="comment">		 * type, and low 20 bits of the original code in code[0] </span></span><br><span class="line"><span class="comment">		 * (8, 4, and 20 bits respectively). code[1] is unmodified. </span></span><br><span class="line"><span class="comment">		 */</span></span><br><span class="line">		code = ((WTERMSIG(rv) &amp; <span class="number">0xff</span>) &lt;&lt; <span class="number">24</span>) |</span><br><span class="line">			((ut-&gt;uu_exception &amp; <span class="number">0x0f</span>) &lt;&lt; <span class="number">20</span>) | </span><br><span class="line">			((<span class="keyword">int</span>)ut-&gt;uu_code &amp; <span class="number">0xfffff</span>);</span><br><span class="line">		subcode = ut-&gt;uu_subcode;</span><br><span class="line">		(<span class="keyword">void</span>) task_exception_notify(EXC_CRASH, code, subcode);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">skipcheck:</span><br><span class="line">	<span class="comment">/* Notify the perf server? */</span></span><br><span class="line">	<span class="keyword">if</span> (perf_notify) &#123;</span><br><span class="line">		(<span class="keyword">void</span>)sys_perf_notify(self, p-&gt;p_pid);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Remove proc from allproc queue and from pidhash chain.</span></span><br><span class="line"><span class="comment">	 * Need to do this before we do anything that can block.</span></span><br><span class="line"><span class="comment">	 * Not doing causes things like mount() find this on allproc</span></span><br><span class="line"><span class="comment">	 * in partially cleaned state.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line"></span><br><span class="line">	proc_list_lock();</span><br><span class="line"></span><br><span class="line">	LIST_REMOVE(p, p_list);</span><br><span class="line">	LIST_INSERT_HEAD(&amp;zombproc, p, p_list);	<span class="comment">/* Place onto zombproc. */</span></span><br><span class="line">	<span class="comment">/* will not be visible via proc_find */</span></span><br><span class="line">	p-&gt;p_listflag |= P_LIST_EXITED;</span><br><span class="line"></span><br><span class="line">	proc_list_unlock();</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> PGINPROF</span></span><br><span class="line">	vmsizmon();</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * If parent is waiting for us to exit or exec,</span></span><br><span class="line"><span class="comment">	 * P_LPPWAIT is set; we will wakeup the parent below.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	proc_lock(p);</span><br><span class="line">	p-&gt;p_lflag &amp;= ~(P_LTRACED | P_LPPWAIT);</span><br><span class="line">	p-&gt;p_sigignore = ~(sigcantmask);</span><br><span class="line">	ut-&gt;uu_siglist = <span class="number">0</span>;</span><br><span class="line">	proc_unlock(p);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+    </article>
+    <!-- license  -->
+    
+        <div class="license-wrapper">
+            <p>Author：<a href="http://yoursite.com">junyixie</a>
+            <p>原文链接：<a href="http://yoursite.com/2019/09/28/CrashMonitorSystem/">http://yoursite.com/2019/09/28/CrashMonitorSystem/</a>
+            <p>发表日期：<a href="http://yoursite.com/2019/09/28/CrashMonitorSystem/">September 28th 2019, 2:27:45 pm</a>
+            <p>更新日期：<a href="http://yoursite.com/2019/09/28/CrashMonitorSystem/">November 26th 2019, 11:52:59 pm</a>
+            <p>版权声明：本文采用<a rel="license noopener" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>进行许可</p>
+        </div>
+    
+    <!-- paginator  -->
+    <ul class="post-paginator">
+        <li class="next">
+            
+                <div class="nextSlogan">Next Post</div>
+                <a href= "/2019/10/05/cocoapodsdev/" title= "CocoaPods插件开发原理(一) CocoaPods做了啥">
+                    <div class="nextTitle">CocoaPods插件开发原理(一) CocoaPods做了啥</div>
+                </a>
+            
+        </li>
+        <li class="previous">
+            
+                <div class="prevSlogan">Previous Post</div>
+                <a href= "/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" title= "DWARF和符号化">
+                    <div class="prevTitle">DWARF和符号化</div>
+                </a>
+            
+        </li>
+    </ul>
+    <!-- 评论插件 -->
+    <!-- 来必力City版安装代码 -->
+
+<!-- City版安装代码已完成 -->
+    
+    
+    <!-- gitalk评论 -->
+
+    <!-- utteranc评论 -->
+
+    <!-- partial('_partial/comment/changyan') -->
+    <!--PC版-->
+
+
+    
+    
+
+    <!-- 评论 -->
+</main>
+            <!-- profile -->
+            
+        </div>
+        <footer class="footer footer-unloaded">
+    <!-- social  -->
+    
+    <div class="social">
+        
+    
+        
+            
+                <a href="mailto:xie.junyi@outlook.com" target="_blank" rel="noopener" class="iconfont-archer email" title=email ></a>
+            
+        
+    
+        
+            
+                <a href="//github.com/junyixie" class="iconfont-archer github" target="_blank" title=github></a>
+            
+        
+    
+        
+            
+                <span class="iconfont-archer wechat" title=wechat>
+                  
+                  <img class="profile-qr" src="/assets/example_qr.png" />
+                </span>
+            
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+
+    </div>
+    
+    <!-- powered by Hexo  -->
+    <div class="copyright">
+        <span id="hexo-power">Powered by <a href="https://hexo.io/" target="_blank">Hexo</a></span><span class="iconfont-archer power">&#xe635;</span><span id="theme-info">theme <a href="https://github.com/fi3ework/hexo-theme-archer" target="_blank">Archer</a></span>
+    </div>
+    <!-- 不蒜子  -->
+    
+    <div class="busuanzi-container">
+    
+     
+    <span id="busuanzi_container_site_pv">PV: <span id="busuanzi_value_site_pv"></span> :)</span>
+    
+    </div>
+    
+</footer>
+    </div>
+    <!-- toc -->
+    
+    <div class="toc-wrapper" style=
+    
+
+
+
+
+
+
+
+top:50vh;
+
+    >
+        <div class="toc-catalog">
+            <span class="iconfont-archer catalog-icon">&#xe613;</span><span>CATALOG</span>
+        </div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Crash捕获"><span class="toc-number">1.</span> <span class="toc-text">Crash捕获</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#异常处理流程"><span class="toc-number">2.</span> <span class="toc-text">异常处理流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Mach异常模型"><span class="toc-number">2.1.</span> <span class="toc-text">Mach异常模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Mach异常和Signal的转换"><span class="toc-number">2.2.</span> <span class="toc-text">Mach异常和Signal的转换</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#硬件异常触发流程"><span class="toc-number">2.3.</span> <span class="toc-text">硬件异常触发流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#软件异常"><span class="toc-number">2.4.</span> <span class="toc-text">软件异常</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#系统是怎么抓的crash-为什么都是-EXC-CRASH-类型？"><span class="toc-number">2.5.</span> <span class="toc-text">系统是怎么抓的crash? 为什么都是 EXC_CRASH 类型？</span></a></li></ol></li></ol>
+    </div>
+    
+    <div class="back-top iconfont-archer">&#xe639;</div>
+    <div class="sidebar sidebar-hide">
+    <ul class="sidebar-tabs sidebar-tabs-active-0">
+        <li class="sidebar-tab-archives"><span class="iconfont-archer">&#xe67d;</span><span class="tab-name">Archive</span></li>
+        <li class="sidebar-tab-tags"><span class="iconfont-archer">&#xe61b;</span><span class="tab-name">Tag</span></li>
+        <li class="sidebar-tab-categories"><span class="iconfont-archer">&#xe666;</span><span class="tab-name">Cate</span></li>
+    </ul>
+    <div class="sidebar-content sidebar-content-show-archive">
+          <div class="sidebar-panel-archives">
+    <!-- 在ejs中将archive按照时间排序 -->
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <div class="total-and-search">
+        <div class="total-archive">
+        Total : 29
+        </div>
+        <!-- search  -->
+        
+    </div>
+    
+    <div class="post-archive">
+    
+    
+    
+    
+    <div class="archive-year"> 2020 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2020/10/05/cpythonstrip/" >cpython3.8瘦身到0.95mb</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2020/04/10/objcblockimp/" >imp_implementationWithBlock 的内部实现 trampoline</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/08</span><a class="archive-post-title" href= "/2020/04/08/lliread/" >lli源码阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/01</span><a class="archive-post-title" href= "/2020/04/01/MachOObjC/" >MachO（一） ObjC类结构的加载</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/25</span><a class="archive-post-title" href= "/2020/03/25/DobbyRead/" >Dobby源码学习（一） Inline Hook</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/19</span><a class="archive-post-title" href= "/2020/03/19/cocoapods-new-feature/" >cocoapods 新feature 开发 Example, On Demand Resource</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/04</span><a class="archive-post-title" href= "/2020/03/04/lazybind/" >dyld(2) lazy bind 和 dyld_stub_binder</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/03</span><a class="archive-post-title" href= "/2020/03/03/macholinkedit/" >dyld(1) MachO Linkedit 段</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/19</span><a class="archive-post-title" href= "/2020/02/19/crashruntimeinfo/" >Block ABI 文档阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/12</span><a class="archive-post-title" href= "/2020/02/12/iosdevdebug/" >iOS开发必备的问题定位调试技巧</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2019 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">11/26</span><a class="archive-post-title" href= "/2019/11/26/projectpodenv/" >CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2019/10/05/cocoapodsdev/" >CocoaPods插件开发原理(一) CocoaPods做了啥</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/28</span><a class="archive-post-title" href= "/2019/09/28/CrashMonitorSystem/" >崩溃捕获系统的原理（一）异常信号</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2018 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/30</span><a class="archive-post-title" href= "/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" >DWARF和符号化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/16</span><a class="archive-post-title" href= "/2018/09/16/CrashSymbolicateSystemDesign/" >APM Crash系统</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">06/13</span><a class="archive-post-title" href= "/2018/06/13/libmalloc/" >libmalloc "malloc" 探究</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/13</span><a class="archive-post-title" href= "/2018/04/13/dependency/" >关于架构和编码的思考</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2018/04/10/iosoom/" >iOS OOM</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2018/01/15/sharedlibraryandpic/" >fishhook与共享库和PIC</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2017 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/24</span><a class="archive-post-title" href= "/2017/12/24/In-depthUnderStandingOfThreadSafety/" >理解线程安全</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/04</span><a class="archive-post-title" href= "/2017/12/04/safeSwizzleRSSwizzleAnalyze/" >Method Swizzling 的正确途径</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/27</span><a class="archive-post-title" href= "/2017/10/27/dyld3withappstart/" >链接和App启动速度优化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/26</span><a class="archive-post-title" href= "/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/" >理解HTTPS</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">05/01</span><a class="archive-post-title" href= "/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/" >Objective-C 深入理解中的消息机制和方法调用</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/20</span><a class="archive-post-title" href= "/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" >Cocoa 深入理解KVO</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/06</span><a class="archive-post-title" href= "/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/" >理解 Objc Runtime</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/01</span><a class="archive-post-title" href= "/2017/02/01/Objective-C-weak-%E5%85%B3%E9%94%AE%E5%AD%97-%E5%AE%9E%E7%8E%B0-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Objective-C weak 关键字 实现 源码分析</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/24</span><a class="archive-post-title" href= "/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/" >iOS Core Animation性能调优 笔记</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2017/01/15/Aspects-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Aspects 源码分析</a>
+        </li>
+    
+    </div>
+  </div>
+        <div class="sidebar-panel-tags">
+    <div class="sidebar-tags-name">
+    
+    </div>
+    <div class="iconfont-archer sidebar-tags-empty">&#xe678;</div>
+    <div class="tag-load-fail" style="display: none; color: #ccc; font-size: 0.6rem;">
+    缺失模块。<br/>
+    1、请确保node版本大于6.2<br/>
+    2、在博客根目录（注意不是archer根目录）执行以下命令：<br/>
+    <span style="color: #f75357; font-size: 1rem; line-height: 2rem;">npm i hexo-generator-json-content --save</span><br/>
+    3、在根目录_config.yml里添加配置：
+    <pre style="color: #787878; font-size: 0.6rem;">
+jsonContent:
+  meta: false
+  pages: false
+  posts:
+    title: true
+    date: true
+    path: true
+    text: false
+    raw: false
+    content: false
+    slug: false
+    updated: false
+    comments: false
+    link: false
+    permalink: false
+    excerpt: false
+    categories: true
+    tags: true</pre>
+    </div> 
+    <div class="sidebar-tags-list"></div>
+</div>
+        <div class="sidebar-panel-categories">
+    <div class="sidebar-categories-name">
+    
+        <span class="sidebar-category-name" data-categories="iOS"><span class="iconfont-archer">&#xe60a;</span>iOS</span>
+    
+        <span class="sidebar-category-name" data-categories="源码分析"><span class="iconfont-archer">&#xe60a;</span>源码分析</span>
+    
+        <span class="sidebar-category-name" data-categories="APM"><span class="iconfont-archer">&#xe60a;</span>APM</span>
+    
+        <span class="sidebar-category-name" data-categories="设计架构"><span class="iconfont-archer">&#xe60a;</span>设计架构</span>
+    
+        <span class="sidebar-category-name" data-categories="研发流程"><span class="iconfont-archer">&#xe60a;</span>研发流程</span>
+    
+        <span class="sidebar-category-name" data-categories="Hook"><span class="iconfont-archer">&#xe60a;</span>Hook</span>
+    
+    </div>
+    <div class="iconfont-archer sidebar-categories-empty">&#xe678;</div>
+    <div class="sidebar-categories-list"></div>
+</div>
+    </div>
+</div> 
+    <script>
+    var siteMeta = {
+        root: "/",
+        author: "junyixie"
+    }
+</script>
+    <!-- CDN failover -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+    <script type="text/javascript">
+        if (typeof window.$ === 'undefined')
+        {
+            console.warn('jquery load from jsdelivr failed, will load local script')
+            document.write('<script src="/lib/jquery.min.js">\x3C/script>')
+        }
+    </script>
+    <script src="/scripts/main.js"></script>
+    <!-- algolia -->
+    
+    <!-- busuanzi  -->
+    
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    
+    <!-- CNZZ  -->
+    
+    </div>
+    <!-- async load share.js -->
+    
+        <script src="/scripts/share.js" async></script>    
+     
+    </body>
+</html>
+
+

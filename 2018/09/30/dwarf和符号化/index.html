@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="en">
+    <!-- title -->
+
+
+
+
+<!-- keywords -->
+
+
+
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" >
+    <meta name="author" content="junyixie">
+    <meta name="renderer" content="webkit">
+    <meta name="copyright" content="junyixie">
+    
+    <meta name="keywords" content="hexo,hexo-theme,hexo-blog,blog,谢俊逸">
+    
+    <meta name="description" content="">
+    <meta name="description" content="DWARF 格式简介DWARF: 它是可执行程序与源代码关系的一个紧凑的表示. 大多数现代编程语言是块结构的：每个实体（例如，一个类定义或一个函数）被包含在另一个实体中。在一个C程序里，每个文件可能包含多个数据定义、多个变量定义，及多个函数。DWARF遵循这个模型，它也是块结构的。在DWARF里基本的描述项是调试信息项（DebuggingInformation Entry——DIE）。一个DIE有">
+<meta property="og:type" content="article">
+<meta property="og:title" content="DWARF和符号化">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2018&#x2F;09&#x2F;30&#x2F;dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="DWARF 格式简介DWARF: 它是可执行程序与源代码关系的一个紧凑的表示. 大多数现代编程语言是块结构的：每个实体（例如，一个类定义或一个函数）被包含在另一个实体中。在一个C程序里，每个文件可能包含多个数据定义、多个变量定义，及多个函数。DWARF遵循这个模型，它也是块结构的。在DWARF里基本的描述项是调试信息项（DebuggingInformation Entry——DIE）。一个DIE有">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2019-11-26T15:30:40.443Z">
+<meta name="twitter:card" content="summary">
+    <meta http-equiv="Cache-control" content="no-cache">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    
+    <title>DWARF和符号化 · xiejunyi,谢俊逸</title>
+    <style type="text/css">
+    @font-face {
+        font-family: 'Oswald-Regular';
+        src: url("/font/Oswald-Regular.ttf");
+    }
+
+    body {
+        margin: 0;
+    }
+
+    header,
+    footer,
+    .back-top,
+    .sidebar,
+    .container,
+    .site-intro-meta,
+    .toc-wrapper {
+        display: none;
+    }
+
+    .site-intro {
+        position: relative;
+        z-index: 3;
+        width: 100%;
+        /* height: 50vh; */
+        overflow: hidden;
+    }
+
+    .site-intro-placeholder {
+        position: absolute;
+        z-index: -2;
+        top: 0;
+        left: 0;
+        width: calc(100% + 300px);
+        height: 100%;
+        background: repeating-linear-gradient(-45deg, #444 0, #444 80px, #333 80px, #333 160px);
+        background-position: center center;
+        transform: translate3d(-226px, 0, 0);
+        animation: gradient-move 2.5s ease-out 0s infinite;
+    }
+
+    @keyframes gradient-move {
+        0% {
+            transform: translate3d(-226px, 0, 0);
+        }
+        100% {
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+</style>
+
+    <link rel="preload" href= "/css/style.css?v=20180824" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    <link rel="stylesheet" href= "/css/mobile.css?v=20180824" media="(max-width: 980px)">
+    
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    
+    <!-- /*! loadCSS. [c]2017 Filament Group, Inc. MIT License */
+/* This file is meant as a standalone workflow for
+- testing support for link[rel=preload]
+- enabling async CSS loading in browsers that do not support rel=preload
+- applying rel preload css once loaded, whether supported or not.
+*/ -->
+<script>
+(function( w ){
+	"use strict";
+	// rel=preload support test
+	if( !w.loadCSS ){
+		w.loadCSS = function(){};
+	}
+	// define on the loadCSS obj
+	var rp = loadCSS.relpreload = {};
+	// rel=preload feature support test
+	// runs once and returns a function for compat purposes
+	rp.support = (function(){
+		var ret;
+		try {
+			ret = w.document.createElement( "link" ).relList.supports( "preload" );
+		} catch (e) {
+			ret = false;
+		}
+		return function(){
+			return ret;
+		};
+	})();
+
+	// if preload isn't supported, get an asynchronous load by using a non-matching media attribute
+	// then change that media back to its intended value on load
+	rp.bindMediaToggle = function( link ){
+		// remember existing media attr for ultimate state, or default to 'all'
+		var finalMedia = link.media || "all";
+
+		function enableStylesheet(){
+			link.media = finalMedia;
+		}
+
+		// bind load handlers to enable media
+		if( link.addEventListener ){
+			link.addEventListener( "load", enableStylesheet );
+		} else if( link.attachEvent ){
+			link.attachEvent( "onload", enableStylesheet );
+		}
+
+		// Set rel and non-applicable media type to start an async request
+		// note: timeout allows this to happen async to let rendering continue in IE
+		setTimeout(function(){
+			link.rel = "stylesheet";
+			link.media = "only x";
+		});
+		// also enable media after 3 seconds,
+		// which will catch very old browsers (android 2.x, old firefox) that don't support onload on link
+		setTimeout( enableStylesheet, 3000 );
+	};
+
+	// loop through link elements in DOM
+	rp.poly = function(){
+		// double check this to prevent external calls from running
+		if( rp.support() ){
+			return;
+		}
+		var links = w.document.getElementsByTagName( "link" );
+		for( var i = 0; i < links.length; i++ ){
+			var link = links[ i ];
+			// qualify links to those with rel=preload and as=style attrs
+			if( link.rel === "preload" && link.getAttribute( "as" ) === "style" && !link.getAttribute( "data-loadcss" ) ){
+				// prevent rerunning on link
+				link.setAttribute( "data-loadcss", true );
+				// bind listeners to toggle media back
+				rp.bindMediaToggle( link );
+			}
+		}
+	};
+
+	// if unsupported, run the polyfill
+	if( !rp.support() ){
+		// run once at least
+		rp.poly();
+
+		// rerun poly on an interval until onload
+		var run = w.setInterval( rp.poly, 500 );
+		if( w.addEventListener ){
+			w.addEventListener( "load", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		} else if( w.attachEvent ){
+			w.attachEvent( "onload", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		}
+	}
+
+
+	// commonjs
+	if( typeof exports !== "undefined" ){
+		exports.loadCSS = loadCSS;
+	}
+	else {
+		w.loadCSS = loadCSS;
+	}
+}( typeof global !== "undefined" ? global : this ) );
+</script>
+
+    <link rel="icon" href= "/assets/favicon.ico" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js" as="script" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js" as="script" />
+    <link rel="preload" href="/scripts/main.js" as="script" />
+    <link rel="preload" as="font" href="/font/Oswald-Regular.ttf" crossorigin>
+    <link rel="preload" as="font" href="https://at.alicdn.com/t/font_327081_1dta1rlogw17zaor.woff" crossorigin>
+    
+    <!-- fancybox -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.js" defer></script>
+    <!-- 百度统计  -->
+    
+    <!-- 谷歌统计  -->
+    
+</head>
+
+    
+        <body class="post-body">
+    
+    
+<header class="header">
+
+    <div class="read-progress"></div>
+    <div class="header-sidebar-menu">&#xe775;</div>
+    <!-- post页的toggle banner  -->
+    
+    <div class="banner">
+            <div class="blog-title">
+                <a href="/" >xiejunyi&#39;s blog.</a>
+            </div>
+            <div class="post-title">
+                <a href="#" class="post-name">DWARF和符号化</a>
+            </div>
+    </div>
+    
+    <a class="home-link" href=/>xiejunyi's blog.</a>
+</header>
+    <div class="wrapper">
+        <div class="site-intro" style="
+
+
+
+
+
+
+
+height:50vh;
+">
+    
+    <!-- 主页  -->
+    
+    
+    <!-- 404页  -->
+            
+    <div class="site-intro-placeholder"></div>
+    <div class="site-intro-img" style="background-image: url(/intro/post-bg.jpg)"></div>
+    <div class="site-intro-meta">
+        <!-- 标题  -->
+        <h1 class="intro-title">
+            <!-- 主页  -->
+            
+            DWARF和符号化
+            <!-- 404 -->
+            
+        </h1>
+        <!-- 副标题 -->
+        <p class="intro-subtitle">
+            <!-- 主页副标题  -->
+            
+            
+            <!-- 404 -->
+            
+        </p>
+        <!-- 文章页meta -->
+        
+            <div class="post-intros">
+                <!-- 文章页标签  -->
+                
+                
+                    <div class="post-intro-read">
+                        <span>Word count: <span class="post-count word-count">1.9k</span>Reading time: <span class="post-count reading-time">8 min</span></span>
+                    </div>
+                
+                <div class="post-intro-meta">
+                    <span class="post-intro-calander iconfont-archer">&#xe676;</span>
+                    <span class="post-intro-time">2018/09/30</span>
+                    
+                    <span id="busuanzi_container_page_pv" class="busuanzi-pv">
+                        <span class="iconfont-archer">&#xe602;</span>
+                        <span id="busuanzi_value_page_pv"></span>
+                    </span>
+                    
+                    <span class="shareWrapper">
+                        <span class="iconfont-archer shareIcon">&#xe71d;</span>
+                        <span class="shareText">Share</span>
+                        <ul class="shareList">
+                            <li class="iconfont-archer share-qr" data-type="qr">&#xe75b;
+                                <div class="share-qrcode"></div>
+                            </li>
+                            <li class="iconfont-archer" data-type="weibo">&#xe619;</li>
+                            <li class="iconfont-archer" data-type="qzone">&#xe62e;</li>
+                            <li class="iconfont-archer" data-type="twitter">&#xe634;</li>
+                            <li class="iconfont-archer" data-type="facebook">&#xe67a;</li>
+                        </ul>
+                    </span>
+                </div>
+            </div>
+        
+    </div>
+</div>
+        <script>
+ 
+  // get user agent
+  var browser = {
+    versions: function () {
+      var u = window.navigator.userAgent;
+      return {
+        userAgent: u,
+        trident: u.indexOf('Trident') > -1, //IE内核
+        presto: u.indexOf('Presto') > -1, //opera内核
+        webKit: u.indexOf('AppleWebKit') > -1, //苹果、谷歌内核
+        gecko: u.indexOf('Gecko') > -1 && u.indexOf('KHTML') == -1, //火狐内核
+        mobile: !!u.match(/AppleWebKit.*Mobile.*/), //是否为移动终端
+        ios: !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/), //ios终端
+        android: u.indexOf('Android') > -1 || u.indexOf('Linux') > -1, //android终端或者uc浏览器
+        iPhone: u.indexOf('iPhone') > -1 || u.indexOf('Mac') > -1, //是否为iPhone或者安卓QQ浏览器
+        iPad: u.indexOf('iPad') > -1, //是否为iPad
+        webApp: u.indexOf('Safari') == -1, //是否为web应用程序，没有头部与底部
+        weixin: u.indexOf('MicroMessenger') == -1, //是否为微信浏览器
+        uc: u.indexOf('UCBrowser') > -1 //是否为android下的UC浏览器
+      };
+    }()
+  }
+  console.log("userAgent:" + browser.versions.userAgent);
+
+  // callback
+  function fontLoaded() {
+    console.log('font loaded');
+    if (document.getElementsByClassName('site-intro-meta')) {
+      document.getElementsByClassName('intro-title')[0].classList.add('intro-fade-in');
+      document.getElementsByClassName('intro-subtitle')[0].classList.add('intro-fade-in');
+      var postIntros = document.getElementsByClassName('post-intros')[0]
+      if (postIntros) {
+        postIntros.classList.add('post-fade-in');
+      }
+    }
+  }
+
+  // UC不支持跨域，所以直接显示
+  function asyncCb(){
+    if (browser.versions.uc) {
+      console.log("UCBrowser");
+      fontLoaded();
+    } else {
+      WebFont.load({
+        custom: {
+          families: ['Oswald-Regular']
+        },
+        loading: function () {  //所有字体开始加载
+          // console.log('loading');
+        },
+        active: function () {  //所有字体已渲染
+          fontLoaded();
+        },
+        inactive: function () { //字体预加载失败，无效字体或浏览器不支持加载
+          console.log('inactive: timeout');
+          fontLoaded();
+        },
+        timeout: 5000 // Set the timeout to two seconds
+      });
+    }
+  }
+
+  function asyncErr(){
+    console.warn('script load from CDN failed, will load local script')
+  }
+
+  // load webfont-loader async, and add callback function
+  function async(u, cb, err) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (cb) { o.addEventListener('load', function (e) { cb(null, e); }, false); }
+    if (err) { o.addEventListener('error', function (e) { err(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+
+  var asyncLoadWithFallBack = function(arr, success, reject) {
+      var currReject = function(){
+        reject()
+        arr.shift()
+        if(arr.length)
+          async(arr[0], success, currReject)
+        }
+
+      async(arr[0], success, currReject)
+  }
+
+  asyncLoadWithFallBack([
+    "https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js", 
+    "https://cdn.bootcss.com/webfont/1.6.28/webfontloader.js",
+    "/lib/webfontloader.min.js"
+  ], asyncCb, asyncErr)
+</script>        
+        <img class="loading" src="/assets/loading.svg" style="display: block; margin: 6rem auto 0 auto; width: 6rem; height: 6rem;" />
+        <div class="container container-unloaded">
+            <main class="main post-page">
+    <article class="article-entry">
+        <h2 id="DWARF-格式简介"><a href="#DWARF-格式简介" class="headerlink" title="DWARF 格式简介"></a>DWARF 格式简介</h2><p>DWARF: 它是可执行程序与源代码关系的一个紧凑的表示.</p>
+<p>大多数现代编程语言是块结构的：每个实体（例如，一个类定义或一个函数）被包含在另一个实体中。在一个C程序里，每个文件可能包含多个数据定义、多个变量定义，及多个函数。DWARF遵循这个模型，它也是块结构的。在DWARF里基本的描述项是调试信息项（DebuggingInformation Entry——DIE）。一个DIE有一个标签，它指明了这个DIE描述什么及一个填入了细节并进一步描述该项的属性列表。一个DIE（除了最顶层的）被一个父DIE包含（或者说拥有），并可能有兄弟DIE或子DIE。属性可能包含各种值：常量（比如一个函数名），变量（比如一个函数的起始地址），或对另一个DIE的引用（比如一个函数的返回值类型）。</p>
+<h2 id="利用DWARF符号化"><a href="#利用DWARF符号化" class="headerlink" title="利用DWARF符号化"></a>利用DWARF符号化</h2><p>符号化地址，我们期望的结果是，获取地址对应的函数名称和调用行数等信息。DWARF调试格式中携带了大量信息，当然包括函数名称和地址。因此如果我们提供的调用地址能在函数中找到信息，优先使用DWARF中的符号信息进行符号化。</p>
+<p>在 DWARF 中，这些信息主要由 DW_AT_subprogram 和 line table 承载。<br>我们只需要根据地址在 DWARF 文件中找到对应的 信息。</p>
+<h3 id="函数名称"><a href="#函数名称" class="headerlink" title="函数名称"></a>函数名称</h3><p>DW_AT_Subprogram 中可以获取到的信息</p>
+<p>很容易看到，Dwarf调试信息中精心设计了 函数信息的具体表示，我们可以获取名称和类型等重要的信息。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="number">1</span>$:    DW_TAG_unspecified_type</span><br><span class="line">           DW_AT_name(<span class="string">"void"</span>)</span><br><span class="line">           ...</span><br><span class="line"><span class="number">2</span>$     DW_TAG_base_type</span><br><span class="line">           DW_AT_name(<span class="string">"int"</span>)</span><br><span class="line">           ...</span><br><span class="line"><span class="number">3</span>$:    DW_TAG_class_type</span><br><span class="line">           DW_AT_name(<span class="string">"A"</span>)</span><br><span class="line">           ...</span><br><span class="line"><span class="number">4</span>$:        DW_TAG_pointer_type</span><br><span class="line">               DW_AT_type(reference to <span class="number">3</span>$)</span><br><span class="line">               ...</span><br><span class="line"><span class="number">5</span>$:        DW_TAG_const_type</span><br><span class="line">               DW_AT_type(reference to <span class="number">3</span>$)</span><br><span class="line">               ...</span><br><span class="line"><span class="number">6</span>$:        DW_TAG_pointer_type</span><br><span class="line">               DW_AT_type(reference to <span class="number">5</span>$)</span><br><span class="line">               ...</span><br><span class="line"><span class="number">7</span>$:        DW_TAG_subprogram</span><br><span class="line">               DW_AT_name(<span class="string">"func1"</span>)</span><br><span class="line">               DW_AT_type(reference to <span class="number">1</span>$)</span><br><span class="line">               DW_AT_object_pointer(reference to <span class="number">8</span>$)</span><br><span class="line">                   ! References a formal parameter in <span class="keyword">this</span> member function</span><br><span class="line">               ...</span><br><span class="line"><span class="number">8</span>$:            DW_TAG_formal_parameter</span><br><span class="line">                   DW_AT_artificial(<span class="literal">true</span>)</span><br><span class="line">                   DW_AT_name(<span class="string">"this"</span>)</span><br><span class="line">                   DW_AT_type(reference to <span class="number">4</span>$)</span><br><span class="line">                       ! Makes type of 'this' as 'A*' =&gt;</span><br><span class="line">                       ! func1 has <span class="keyword">not</span> been marked <span class="keyword">const</span> <span class="keyword">or</span> <span class="keyword">volatile</span></span><br><span class="line">                   DW_AT_location ...</span><br><span class="line">                   ...</span><br><span class="line"><span class="number">9</span>$:            DW_TAG_formal_parameter</span><br><span class="line">                   DW_AT_name(x1)</span><br><span class="line">                   DW_AT_type(reference to <span class="number">2</span>$)</span><br><span class="line">                   ...</span><br><span class="line"><span class="number">10</span>$:       DW_TAG_subprogram</span><br><span class="line">               DW_AT_name(<span class="string">"func2"</span>)</span><br><span class="line">               DW_AT_type(reference to <span class="number">1</span>$)</span><br><span class="line">               DW_AT_object_pointer(reference to <span class="number">11</span>$)</span><br><span class="line">                   ! References a formal parameter in <span class="keyword">this</span> member function</span><br><span class="line">               ...</span><br><span class="line"><span class="number">11</span>$:           DW_TAG_formal_parameter</span><br><span class="line">                   DW_AT_artificial(<span class="literal">true</span>)</span><br><span class="line">                   DW_AT_name(<span class="string">"this"</span>)</span><br><span class="line">                   DW_AT_type(reference to <span class="number">6</span>$)</span><br><span class="line">                       ! Makes type of 'this' as 'A const*' =&gt;</span><br><span class="line">                       ! func2 marked as <span class="keyword">const</span></span><br><span class="line">                   DW_AT_location ...</span><br><span class="line">                   ...</span><br><span class="line"><span class="number">12</span>$:       DW_TAG_subprogram</span><br><span class="line">               DW_AT_name(<span class="string">"func3"</span>)</span><br><span class="line">               DW_AT_type(reference to <span class="number">1</span>$)</span><br><span class="line">               ...</span><br><span class="line">                   ! No 'this' formal parameter =&gt; func3 is static</span><br><span class="line"><span class="number">13</span>$:           DW_TAG_formal_parameter</span><br><span class="line">                   DW_AT_name(x3)</span><br><span class="line">                   DW_AT_type(reference to <span class="number">2</span>$)</span><br><span class="line">                   ...</span><br></pre></td></tr></table></figure>
+
+
+<h3 id="内联函数处理"><a href="#内联函数处理" class="headerlink" title="内联函数处理"></a>内联函数处理</h3><p>对于内联函数，编译器会将其在多处展开。可以通过 DW_AT_inline 标志判断其展开的状态和判断其是否是”abstract instance entry”.<br>基于存储空间的考虑，把 某个内联函数构造成 “abstract instance entry” 提供名称等信息，可以避免多个具体内联函数展开的重复空间消耗。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line">       ! Abstract instance <span class="keyword">for</span> OUTER</span><br><span class="line">        !</span><br><span class="line">OUTER.AI<span class="number">.1</span><span class="number">.1</span>:</span><br><span class="line">        DW_TAG_subprogram</span><br><span class="line">            DW_AT_name(<span class="string">"OUTER"</span>)</span><br><span class="line">            DW_AT_inline(DW_INL_declared_inlined)</span><br><span class="line">            ! No low/high PCs</span><br><span class="line">OUTER.AI<span class="number">.1</span><span class="number">.2</span>:</span><br><span class="line">            DW_TAG_formal_parameter</span><br><span class="line">                DW_AT_name(<span class="string">"OUTER_FORMAL"</span>)</span><br><span class="line">                DW_AT_type(reference to integer)</span><br><span class="line">                ! No location</span><br><span class="line">OUTER.AI<span class="number">.1</span><span class="number">.3</span>:</span><br><span class="line">            DW_TAG_variable</span><br><span class="line">                DW_AT_name(<span class="string">"OUTER_LOCAL"</span>)</span><br><span class="line">                DW_AT_type(reference to integer)</span><br><span class="line">                ! No location</span><br><span class="line">            !</span><br><span class="line">            ! Abstract instance <span class="keyword">for</span> INNER</span><br><span class="line">            !</span><br><span class="line">INNER.AI<span class="number">.1</span><span class="number">.1</span>:</span><br><span class="line">            DW_TAG_subprogram</span><br><span class="line">                DW_AT_name(<span class="string">"INNER"</span>)</span><br><span class="line">                DW_AT_inline(DW_INL_declared_inlined)</span><br><span class="line">                ! No low/high PCs</span><br><span class="line">INNER.AI<span class="number">.1</span><span class="number">.2</span>:   DW_TAG_formal_parameter</span><br><span class="line">                    DW_AT_name(<span class="string">"INNER_FORMAL"</span>)</span><br><span class="line">                    DW_AT_type(reference to integer)</span><br><span class="line">                    ! No location</span><br><span class="line">INNER.AI<span class="number">.1</span><span class="number">.3</span>:   DW_TAG_variable</span><br><span class="line">                    DW_AT_name(<span class="string">"INNER_LOCAL"</span>)</span><br><span class="line">                    DW_AT_type(reference to integer)</span><br><span class="line">                    ! No location</span><br><span class="line">                ...</span><br><span class="line">                <span class="number">0</span></span><br><span class="line"></span><br><span class="line">            ! <span class="function">No <span class="title">DW_TAG_inlined_subroutine</span> <span class="params">(concrete instance)</span></span></span><br><span class="line">      ! for INNER corresponding to calls of INNER</span><br><span class="line"></span><br><span class="line">            ...</span><br><span class="line">            <span class="number">0</span></span><br><span class="line"></span><br><span class="line">Figure <span class="number">66.</span> Inlining example #<span class="number">1</span>: abstract instance</span><br></pre></td></tr></table></figure>
+
+<p><strong>concrete instance</strong> 表示编译时，某处内联函数的展开。它最主要的信息就是 DW_AT_low_pc,DW_AT_high_pc 通过pc地址信息，我们可以将函数调用地址定位到具体的DWARF debug entry。<br>由于存在 “abstract instance”，”concrete instance” 的某些属性会被省略，因此我们需要通过 DW_AT_abstract_origin 属性去找到对应的 abstract instance entry，获取被省略掉的信息。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line">        ! Concrete instance <span class="keyword">for</span> call <span class="string">"OUTER(7)"</span></span><br><span class="line">  !</span><br><span class="line">OUTER.CI<span class="number">.1</span><span class="number">.1</span>:</span><br><span class="line">        DW_TAG_inlined_subroutine</span><br><span class="line">            ! No name</span><br><span class="line">            DW_AT_abstract_origin(reference to OUTER.AI<span class="number">.1</span><span class="number">.1</span>)</span><br><span class="line">            DW_AT_low_pc(...)</span><br><span class="line">            DW_AT_high_pc(...)</span><br><span class="line">OUTER.CI<span class="number">.1</span><span class="number">.2</span>:</span><br><span class="line">            DW_TAG_formal_parameter</span><br><span class="line">                ! No name</span><br><span class="line">                DW_AT_abstract_origin(reference to OUTER.AI<span class="number">.1</span><span class="number">.2</span>)</span><br><span class="line">    DW_AT_const_value(<span class="number">7</span>)</span><br><span class="line">OUTER.CI<span class="number">.1</span><span class="number">.3</span>:</span><br><span class="line">            DW_TAG_variable</span><br><span class="line">                ! No name</span><br><span class="line">                DW_AT_abstract_origin(reference to OUTER.AI<span class="number">.1</span><span class="number">.3</span>)</span><br><span class="line">                DW_AT_location(...)</span><br><span class="line">            !</span><br><span class="line">            ! <span class="function">No <span class="title">DW_TAG_subprogram</span> <span class="params">(abstract instance)</span> <span class="keyword">for</span> INNER</span></span><br><span class="line">            !</span><br><span class="line">            ! <span class="function">Concrete instance <span class="keyword">for</span> call <span class="title">INNER</span><span class="params">(OUTER_LOCAL)</span></span></span><br><span class="line">            ! </span><br><span class="line">INNER.CI<span class="number">.1</span><span class="number">.1</span>:</span><br><span class="line">            DW_TAG_inlined_subroutine</span><br><span class="line">                ! No name</span><br><span class="line">                DW_AT_abstract_origin(reference to INNER.AI<span class="number">.1</span><span class="number">.1</span>)</span><br><span class="line">                DW_AT_low_pc(...)</span><br><span class="line">                DW_AT_high_pc(...)</span><br><span class="line">                DW_AT_static_link(...)</span><br><span class="line">INNER.CI<span class="number">.1</span><span class="number">.2</span>:   DW_TAG_formal_parameter</span><br><span class="line">                    ! No name</span><br><span class="line">                    DW_AT_abstract_origin(reference to INNER.AI<span class="number">.1</span><span class="number">.2</span>)</span><br><span class="line">                    DW_AT_location(...)</span><br><span class="line">INNER.CI<span class="number">.1</span><span class="number">.3</span>:   DW_TAG_variable</span><br><span class="line">                    ! No name</span><br><span class="line">                    DW_AT_abstract_origin(reference to INNER.AI<span class="number">.1</span><span class="number">.3</span>)</span><br><span class="line">                    DW_AT_location(...)</span><br><span class="line">                ...</span><br><span class="line">                <span class="number">0</span></span><br><span class="line"></span><br><span class="line">      ! Another concrete instance of INNER within OUTER</span><br><span class="line">      ! <span class="keyword">for</span> the call <span class="string">"INNER(31)"</span></span><br><span class="line"></span><br><span class="line">            ...</span><br><span class="line">            <span class="number">0</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="非定义调试信息项处理"><a href="#非定义调试信息项处理" class="headerlink" title="非定义调试信息项处理"></a>非定义调试信息项处理</h3><p>当函数定义并不在声明区域时，subprogram DIE 就会有 DW_AT_specification 属性，指向相关的函数定义DIE.<br>对于带有 DW_AT_specification 的调试信息项，我们需要进行特殊处理。</p>
+<h3 id="定位地址对应Dwarf-debug-info"><a href="#定位地址对应Dwarf-debug-info" class="headerlink" title="定位地址对应Dwarf debug info"></a>定位地址对应Dwarf debug info</h3><p>backtrace() 我们可以拿到 image 的 loadaddress 和 address调用地址。</p>
+<p>进而得到文件虚拟地址<br>fileVmAddress = address - (loadaddress - imageFileVmTextAddress)</p>
+<p>通过文件虚拟地址后通过 .debug_aranges 查找到指定的 DWARF compile unit，进而查找到具体的DIE. 从属性中获取我们需要的信息。</p>
+<p>.debug_aranges 是DWARF 中包含 debug info entry offset的 Section。<br>DWARF compile unit 是编译单元，在这里我们可以理解为文件或文件中的片段。也是DIE</p>
+<h3 id="行号信息"><a href="#行号信息" class="headerlink" title="行号信息"></a>行号信息</h3><p>对于一个文件，我们将其编译后，其产出汇编代码类似于这种形式，在原始文件中的行对应着多条汇编指令。<br>对于行号的查找我们只需要 将符号的运行时地址转换为文件的虚拟地址，在该文件的行号信息中进行范围查找即可。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">1</span>: <span class="keyword">int</span></span><br><span class="line"><span class="number">2</span>: main()</span><br><span class="line">    <span class="number">0x239</span>: push pb</span><br><span class="line">    <span class="number">0x23a</span>: mov  bp,sp</span><br><span class="line"><span class="number">3</span>:  &#123;</span><br><span class="line"><span class="number">4</span>:  <span class="built_in">printf</span>(“Omit needless words\n”);</span><br><span class="line">    <span class="number">0x23c</span>: mov  ax,<span class="number">0xaa</span></span><br><span class="line">    <span class="number">0x23f</span>: push ax</span><br><span class="line">    <span class="number">0x240</span>: call _printf</span><br><span class="line">    <span class="number">0x243</span>: pop  cx</span><br><span class="line"><span class="number">5</span>:  <span class="built_in">exit</span>(<span class="number">0</span>);</span><br><span class="line">    <span class="number">0x244</span>: xor  ax,ax</span><br><span class="line">    <span class="number">0x246</span>: push ax</span><br><span class="line">    <span class="number">0x247</span>: call _exit</span><br><span class="line">    <span class="number">0x24a</span>: pop  cx</span><br><span class="line"><span class="number">6</span>:  &#125;</span><br><span class="line">    <span class="number">0x24b</span>: pop  bp</span><br><span class="line">    <span class="number">0x24c</span>: ret</span><br><span class="line"><span class="number">7</span>:</span><br><span class="line">    <span class="number">0x24d</span>:</span><br></pre></td></tr></table></figure>
+
+<p>对应的编码类似于: SPECIAL(n,m) 制定了行号增加和地址增加</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">Opcode  Operand Byte <span class="built_in">Stream</span></span><br><span class="line">--------------------------------------------------------------------------------</span><br><span class="line">DW_LNS_advance_pc LEB128(0x239) 0x2, 0xb9, 0x04</span><br><span class="line">SPECIAL(<span class="number">2</span>, <span class="number">0</span>)   <span class="number">0xb</span></span><br><span class="line">SPECIAL(<span class="number">2</span>, <span class="number">3</span>)   <span class="number">0x38</span></span><br><span class="line">SPECIAL(<span class="number">1</span>, <span class="number">8</span>)   <span class="number">0x82</span></span><br><span class="line">SPECIAL(<span class="number">1</span>, <span class="number">7</span>)   <span class="number">0x73</span></span><br><span class="line">DW_LNS_advance_pc   LEB128(2) 0x2, 0x2</span><br><span class="line">DW_LNE_end_sequence   <span class="number">0x0</span>, <span class="number">0x1</span>, <span class="number">0x1</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="利用symtab符号化"><a href="#利用symtab符号化" class="headerlink" title="利用symtab符号化"></a>利用symtab符号化</h2><p>当我们代码编译的时候，可以选择产生调试信息。也可以不产生调试信息，作为降级方案，我们仍可采用symbtab所包含的信息进行符号化。<br>symtab段我们可以提取到具体符号的地址，对应字符串表中的偏移地址，很容易就取到对应的符号名称。</p>
+<p>具体可以参考各种实现，这里贴一段fishhook里的代码段</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">rebind_symbols_for_image</span><span class="params">(struct rebindings_entry *rebindings,</span></span></span><br><span class="line"><span class="function"><span class="params">                                     <span class="keyword">const</span> struct mach_header *header,</span></span></span><br><span class="line"><span class="function"><span class="params">                                     <span class="keyword">intptr_t</span> slide)</span> </span>&#123;</span><br><span class="line">  Dl_info info;</span><br><span class="line">  <span class="keyword">if</span> (dladdr(header, &amp;info) == <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="built_in">printf</span>(<span class="string">"dli_fname:%s \ndli_sname:%s"</span>, info.dli_fname, info.dli_sname);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">segment_command_t</span> *cur_seg_cmd;</span><br><span class="line">  <span class="keyword">segment_command_t</span> *linkedit_segment = <span class="literal">NULL</span>;</span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">symtab_command</span>* <span class="title">symtab_cmd</span> = <span class="title">NULL</span>;</span></span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">dysymtab_command</span>* <span class="title">dysymtab_cmd</span> = <span class="title">NULL</span>;</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">uintptr_t</span> cur = (<span class="keyword">uintptr_t</span>)header + <span class="keyword">sizeof</span>(<span class="keyword">mach_header_t</span>);</span><br><span class="line">  <span class="keyword">for</span> (uint i = <span class="number">0</span>; i &lt; header-&gt;ncmds; i++, cur += cur_seg_cmd-&gt;cmdsize) &#123;</span><br><span class="line">    cur_seg_cmd = (<span class="keyword">segment_command_t</span> *)cur;</span><br><span class="line">    <span class="keyword">if</span> (cur_seg_cmd-&gt;cmd == LC_SEGMENT_ARCH_DEPENDENT) &#123;</span><br><span class="line">      <span class="keyword">if</span> (<span class="built_in">strcmp</span>(cur_seg_cmd-&gt;segname, SEG_LINKEDIT) == <span class="number">0</span>) &#123;</span><br><span class="line">        linkedit_segment = cur_seg_cmd;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (cur_seg_cmd-&gt;cmd == LC_SYMTAB) &#123;</span><br><span class="line">      symtab_cmd = (struct symtab_command*)cur_seg_cmd;</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (cur_seg_cmd-&gt;cmd == LC_DYSYMTAB) &#123;</span><br><span class="line">      dysymtab_cmd = (struct dysymtab_command*)cur_seg_cmd;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (!symtab_cmd || !dysymtab_cmd || !linkedit_segment ||</span><br><span class="line">      !dysymtab_cmd-&gt;nindirectsyms) &#123;</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Find base symbol/string table addresses</span></span><br><span class="line">  <span class="keyword">uintptr_t</span> linkedit_base = (<span class="keyword">uintptr_t</span>)slide + linkedit_segment-&gt;vmaddr - linkedit_segment-&gt;fileoff;</span><br><span class="line">  <span class="keyword">nlist_t</span> *symtab = (<span class="keyword">nlist_t</span> *)(linkedit_base + symtab_cmd-&gt;symoff);</span><br><span class="line">  <span class="keyword">char</span> *strtab = (<span class="keyword">char</span> *)(linkedit_base + symtab_cmd-&gt;stroff);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Get indirect symbol table (array of uint32_t indices into symbol table)</span></span><br><span class="line">  <span class="keyword">uint32_t</span> *indirect_symtab = (<span class="keyword">uint32_t</span> *)(linkedit_base + dysymtab_cmd-&gt;indirectsymoff);</span><br><span class="line"></span><br><span class="line">  cur = (<span class="keyword">uintptr_t</span>)header + <span class="keyword">sizeof</span>(<span class="keyword">mach_header_t</span>);</span><br><span class="line">  <span class="keyword">for</span> (uint i = <span class="number">0</span>; i &lt; header-&gt;ncmds; i++, cur += cur_seg_cmd-&gt;cmdsize) &#123;</span><br><span class="line">    cur_seg_cmd = (<span class="keyword">segment_command_t</span> *)cur;</span><br><span class="line">    <span class="keyword">if</span> (cur_seg_cmd-&gt;cmd == LC_SEGMENT_ARCH_DEPENDENT) &#123;</span><br><span class="line">      <span class="keyword">if</span> (<span class="built_in">strcmp</span>(cur_seg_cmd-&gt;segname, SEG_DATA) != <span class="number">0</span> &amp;&amp;</span><br><span class="line">          <span class="built_in">strcmp</span>(cur_seg_cmd-&gt;segname, SEG_DATA_CONST) != <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">continue</span>;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">for</span> (uint j = <span class="number">0</span>; j &lt; cur_seg_cmd-&gt;nsects; j++) &#123;</span><br><span class="line">        <span class="keyword">section_t</span> *sect =</span><br><span class="line">          (<span class="keyword">section_t</span> *)(cur + <span class="keyword">sizeof</span>(<span class="keyword">segment_command_t</span>)) + j;</span><br><span class="line">        <span class="keyword">if</span> ((sect-&gt;flags &amp; SECTION_TYPE) == S_LAZY_SYMBOL_POINTERS) &#123;</span><br><span class="line">          perform_rebinding_with_section(rebindings, sect, slide, symtab, strtab, indirect_symtab);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> ((sect-&gt;flags &amp; SECTION_TYPE) == S_NON_LAZY_SYMBOL_POINTERS) &#123;</span><br><span class="line">          perform_rebinding_with_section(rebindings, sect, slide, symtab, strtab, indirect_symtab);</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="优化"><a href="#优化" class="headerlink" title="优化"></a>优化</h2><p>符号化工具提供了 将函数地址 转化为 具体名称等信息的能力。但是提供大规模的符号化能力，需要在 网络I/O,缓存,Server端进一步的优化，这些优化我会写在内网Wiki上 hhhhh…</p>
+<h2 id="写在最后"><a href="#写在最后" class="headerlink" title="写在最后"></a>写在最后</h2><p>符号化仅是DWARF提供能力的冰山一角，作为提供给 lldb, gdb等调试器的文件格式，蕴含着大量的信息，也就是说，上传了DWARF文件，也相当于应用裸奔了…</p>
+
+    </article>
+    <!-- license  -->
+    
+        <div class="license-wrapper">
+            <p>Author：<a href="http://yoursite.com">junyixie</a>
+            <p>原文链接：<a href="http://yoursite.com/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/">http://yoursite.com/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/</a>
+            <p>发表日期：<a href="http://yoursite.com/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/">September 30th 2018, 4:21:07 pm</a>
+            <p>更新日期：<a href="http://yoursite.com/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/">November 26th 2019, 11:30:40 pm</a>
+            <p>版权声明：本文采用<a rel="license noopener" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>进行许可</p>
+        </div>
+    
+    <!-- paginator  -->
+    <ul class="post-paginator">
+        <li class="next">
+            
+                <div class="nextSlogan">Next Post</div>
+                <a href= "/2019/09/28/CrashMonitorSystem/" title= "崩溃捕获系统的原理（一）异常信号">
+                    <div class="nextTitle">崩溃捕获系统的原理（一）异常信号</div>
+                </a>
+            
+        </li>
+        <li class="previous">
+            
+                <div class="prevSlogan">Previous Post</div>
+                <a href= "/2018/09/16/CrashSymbolicateSystemDesign/" title= "APM Crash系统">
+                    <div class="prevTitle">APM Crash系统</div>
+                </a>
+            
+        </li>
+    </ul>
+    <!-- 评论插件 -->
+    <!-- 来必力City版安装代码 -->
+
+<!-- City版安装代码已完成 -->
+    
+    
+    <!-- gitalk评论 -->
+
+    <!-- utteranc评论 -->
+
+    <!-- partial('_partial/comment/changyan') -->
+    <!--PC版-->
+
+
+    
+    
+
+    <!-- 评论 -->
+</main>
+            <!-- profile -->
+            
+        </div>
+        <footer class="footer footer-unloaded">
+    <!-- social  -->
+    
+    <div class="social">
+        
+    
+        
+            
+                <a href="mailto:xie.junyi@outlook.com" target="_blank" rel="noopener" class="iconfont-archer email" title=email ></a>
+            
+        
+    
+        
+            
+                <a href="//github.com/junyixie" class="iconfont-archer github" target="_blank" title=github></a>
+            
+        
+    
+        
+            
+                <span class="iconfont-archer wechat" title=wechat>
+                  
+                  <img class="profile-qr" src="/assets/example_qr.png" />
+                </span>
+            
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+
+    </div>
+    
+    <!-- powered by Hexo  -->
+    <div class="copyright">
+        <span id="hexo-power">Powered by <a href="https://hexo.io/" target="_blank">Hexo</a></span><span class="iconfont-archer power">&#xe635;</span><span id="theme-info">theme <a href="https://github.com/fi3ework/hexo-theme-archer" target="_blank">Archer</a></span>
+    </div>
+    <!-- 不蒜子  -->
+    
+    <div class="busuanzi-container">
+    
+     
+    <span id="busuanzi_container_site_pv">PV: <span id="busuanzi_value_site_pv"></span> :)</span>
+    
+    </div>
+    
+</footer>
+    </div>
+    <!-- toc -->
+    
+    <div class="toc-wrapper" style=
+    
+
+
+
+
+
+
+
+top:50vh;
+
+    >
+        <div class="toc-catalog">
+            <span class="iconfont-archer catalog-icon">&#xe613;</span><span>CATALOG</span>
+        </div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#DWARF-格式简介"><span class="toc-number">1.</span> <span class="toc-text">DWARF 格式简介</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#利用DWARF符号化"><span class="toc-number">2.</span> <span class="toc-text">利用DWARF符号化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#函数名称"><span class="toc-number">2.1.</span> <span class="toc-text">函数名称</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#内联函数处理"><span class="toc-number">2.2.</span> <span class="toc-text">内联函数处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#非定义调试信息项处理"><span class="toc-number">2.3.</span> <span class="toc-text">非定义调试信息项处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#定位地址对应Dwarf-debug-info"><span class="toc-number">2.4.</span> <span class="toc-text">定位地址对应Dwarf debug info</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#行号信息"><span class="toc-number">2.5.</span> <span class="toc-text">行号信息</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#利用symtab符号化"><span class="toc-number">3.</span> <span class="toc-text">利用symtab符号化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#优化"><span class="toc-number">4.</span> <span class="toc-text">优化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#写在最后"><span class="toc-number">5.</span> <span class="toc-text">写在最后</span></a></li></ol>
+    </div>
+    
+    <div class="back-top iconfont-archer">&#xe639;</div>
+    <div class="sidebar sidebar-hide">
+    <ul class="sidebar-tabs sidebar-tabs-active-0">
+        <li class="sidebar-tab-archives"><span class="iconfont-archer">&#xe67d;</span><span class="tab-name">Archive</span></li>
+        <li class="sidebar-tab-tags"><span class="iconfont-archer">&#xe61b;</span><span class="tab-name">Tag</span></li>
+        <li class="sidebar-tab-categories"><span class="iconfont-archer">&#xe666;</span><span class="tab-name">Cate</span></li>
+    </ul>
+    <div class="sidebar-content sidebar-content-show-archive">
+          <div class="sidebar-panel-archives">
+    <!-- 在ejs中将archive按照时间排序 -->
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <div class="total-and-search">
+        <div class="total-archive">
+        Total : 29
+        </div>
+        <!-- search  -->
+        
+    </div>
+    
+    <div class="post-archive">
+    
+    
+    
+    
+    <div class="archive-year"> 2020 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2020/10/05/cpythonstrip/" >cpython3.8瘦身到0.95mb</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2020/04/10/objcblockimp/" >imp_implementationWithBlock 的内部实现 trampoline</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/08</span><a class="archive-post-title" href= "/2020/04/08/lliread/" >lli源码阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/01</span><a class="archive-post-title" href= "/2020/04/01/MachOObjC/" >MachO（一） ObjC类结构的加载</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/25</span><a class="archive-post-title" href= "/2020/03/25/DobbyRead/" >Dobby源码学习（一） Inline Hook</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/19</span><a class="archive-post-title" href= "/2020/03/19/cocoapods-new-feature/" >cocoapods 新feature 开发 Example, On Demand Resource</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/04</span><a class="archive-post-title" href= "/2020/03/04/lazybind/" >dyld(2) lazy bind 和 dyld_stub_binder</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/03</span><a class="archive-post-title" href= "/2020/03/03/macholinkedit/" >dyld(1) MachO Linkedit 段</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/19</span><a class="archive-post-title" href= "/2020/02/19/crashruntimeinfo/" >Block ABI 文档阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/12</span><a class="archive-post-title" href= "/2020/02/12/iosdevdebug/" >iOS开发必备的问题定位调试技巧</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2019 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">11/26</span><a class="archive-post-title" href= "/2019/11/26/projectpodenv/" >CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2019/10/05/cocoapodsdev/" >CocoaPods插件开发原理(一) CocoaPods做了啥</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/28</span><a class="archive-post-title" href= "/2019/09/28/CrashMonitorSystem/" >崩溃捕获系统的原理（一）异常信号</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2018 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/30</span><a class="archive-post-title" href= "/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" >DWARF和符号化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/16</span><a class="archive-post-title" href= "/2018/09/16/CrashSymbolicateSystemDesign/" >APM Crash系统</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">06/13</span><a class="archive-post-title" href= "/2018/06/13/libmalloc/" >libmalloc "malloc" 探究</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/13</span><a class="archive-post-title" href= "/2018/04/13/dependency/" >关于架构和编码的思考</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2018/04/10/iosoom/" >iOS OOM</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2018/01/15/sharedlibraryandpic/" >fishhook与共享库和PIC</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2017 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/24</span><a class="archive-post-title" href= "/2017/12/24/In-depthUnderStandingOfThreadSafety/" >理解线程安全</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/04</span><a class="archive-post-title" href= "/2017/12/04/safeSwizzleRSSwizzleAnalyze/" >Method Swizzling 的正确途径</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/27</span><a class="archive-post-title" href= "/2017/10/27/dyld3withappstart/" >链接和App启动速度优化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/26</span><a class="archive-post-title" href= "/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/" >理解HTTPS</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">05/01</span><a class="archive-post-title" href= "/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/" >Objective-C 深入理解中的消息机制和方法调用</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/20</span><a class="archive-post-title" href= "/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" >Cocoa 深入理解KVO</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/06</span><a class="archive-post-title" href= "/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/" >理解 Objc Runtime</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/01</span><a class="archive-post-title" href= "/2017/02/01/Objective-C-weak-%E5%85%B3%E9%94%AE%E5%AD%97-%E5%AE%9E%E7%8E%B0-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Objective-C weak 关键字 实现 源码分析</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/24</span><a class="archive-post-title" href= "/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/" >iOS Core Animation性能调优 笔记</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2017/01/15/Aspects-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Aspects 源码分析</a>
+        </li>
+    
+    </div>
+  </div>
+        <div class="sidebar-panel-tags">
+    <div class="sidebar-tags-name">
+    
+    </div>
+    <div class="iconfont-archer sidebar-tags-empty">&#xe678;</div>
+    <div class="tag-load-fail" style="display: none; color: #ccc; font-size: 0.6rem;">
+    缺失模块。<br/>
+    1、请确保node版本大于6.2<br/>
+    2、在博客根目录（注意不是archer根目录）执行以下命令：<br/>
+    <span style="color: #f75357; font-size: 1rem; line-height: 2rem;">npm i hexo-generator-json-content --save</span><br/>
+    3、在根目录_config.yml里添加配置：
+    <pre style="color: #787878; font-size: 0.6rem;">
+jsonContent:
+  meta: false
+  pages: false
+  posts:
+    title: true
+    date: true
+    path: true
+    text: false
+    raw: false
+    content: false
+    slug: false
+    updated: false
+    comments: false
+    link: false
+    permalink: false
+    excerpt: false
+    categories: true
+    tags: true</pre>
+    </div> 
+    <div class="sidebar-tags-list"></div>
+</div>
+        <div class="sidebar-panel-categories">
+    <div class="sidebar-categories-name">
+    
+        <span class="sidebar-category-name" data-categories="iOS"><span class="iconfont-archer">&#xe60a;</span>iOS</span>
+    
+        <span class="sidebar-category-name" data-categories="源码分析"><span class="iconfont-archer">&#xe60a;</span>源码分析</span>
+    
+        <span class="sidebar-category-name" data-categories="APM"><span class="iconfont-archer">&#xe60a;</span>APM</span>
+    
+        <span class="sidebar-category-name" data-categories="设计架构"><span class="iconfont-archer">&#xe60a;</span>设计架构</span>
+    
+        <span class="sidebar-category-name" data-categories="研发流程"><span class="iconfont-archer">&#xe60a;</span>研发流程</span>
+    
+        <span class="sidebar-category-name" data-categories="Hook"><span class="iconfont-archer">&#xe60a;</span>Hook</span>
+    
+    </div>
+    <div class="iconfont-archer sidebar-categories-empty">&#xe678;</div>
+    <div class="sidebar-categories-list"></div>
+</div>
+    </div>
+</div> 
+    <script>
+    var siteMeta = {
+        root: "/",
+        author: "junyixie"
+    }
+</script>
+    <!-- CDN failover -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+    <script type="text/javascript">
+        if (typeof window.$ === 'undefined')
+        {
+            console.warn('jquery load from jsdelivr failed, will load local script')
+            document.write('<script src="/lib/jquery.min.js">\x3C/script>')
+        }
+    </script>
+    <script src="/scripts/main.js"></script>
+    <!-- algolia -->
+    
+    <!-- busuanzi  -->
+    
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    
+    <!-- CNZZ  -->
+    
+    </div>
+    <!-- async load share.js -->
+    
+        <script src="/scripts/share.js" async></script>    
+     
+    </body>
+</html>
+
+

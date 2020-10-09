@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+    <!-- title -->
+
+
+
+
+<!-- keywords -->
+
+
+
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" >
+    <meta name="author" content="junyixie">
+    <meta name="renderer" content="webkit">
+    <meta name="copyright" content="junyixie">
+    
+    <meta name="keywords" content="hexo,hexo-theme,hexo-blog,blog,谢俊逸">
+    
+    <meta name="description" content="">
+    <meta name="description" content="dyld会在程序首次执行lazy symbol的时候对其进行绑定操作。这片文章分析一下绑定的过程。 1234_main:...0000000100000f6f         call       imp___stubs__objc_alloc...  可以看到 当调用 objc_alloc 函数时，实际跳转到 imp___stubs__objc_alloc 1234imp___stubs__ob">
+<meta property="og:type" content="article">
+<meta property="og:title" content="dyld(2) lazy bind 和 dyld_stub_binder">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;03&#x2F;04&#x2F;lazybind&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="dyld会在程序首次执行lazy symbol的时候对其进行绑定操作。这片文章分析一下绑定的过程。 1234_main:...0000000100000f6f         call       imp___stubs__objc_alloc...  可以看到 当调用 objc_alloc 函数时，实际跳转到 imp___stubs__objc_alloc 1234imp___stubs__ob">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2020-03-26T15:22:50.732Z">
+<meta name="twitter:card" content="summary">
+    <meta http-equiv="Cache-control" content="no-cache">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    
+    <title>dyld(2) lazy bind 和 dyld_stub_binder · xiejunyi,谢俊逸</title>
+    <style type="text/css">
+    @font-face {
+        font-family: 'Oswald-Regular';
+        src: url("/font/Oswald-Regular.ttf");
+    }
+
+    body {
+        margin: 0;
+    }
+
+    header,
+    footer,
+    .back-top,
+    .sidebar,
+    .container,
+    .site-intro-meta,
+    .toc-wrapper {
+        display: none;
+    }
+
+    .site-intro {
+        position: relative;
+        z-index: 3;
+        width: 100%;
+        /* height: 50vh; */
+        overflow: hidden;
+    }
+
+    .site-intro-placeholder {
+        position: absolute;
+        z-index: -2;
+        top: 0;
+        left: 0;
+        width: calc(100% + 300px);
+        height: 100%;
+        background: repeating-linear-gradient(-45deg, #444 0, #444 80px, #333 80px, #333 160px);
+        background-position: center center;
+        transform: translate3d(-226px, 0, 0);
+        animation: gradient-move 2.5s ease-out 0s infinite;
+    }
+
+    @keyframes gradient-move {
+        0% {
+            transform: translate3d(-226px, 0, 0);
+        }
+        100% {
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+</style>
+
+    <link rel="preload" href= "/css/style.css?v=20180824" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    <link rel="stylesheet" href= "/css/mobile.css?v=20180824" media="(max-width: 980px)">
+    
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    
+    <!-- /*! loadCSS. [c]2017 Filament Group, Inc. MIT License */
+/* This file is meant as a standalone workflow for
+- testing support for link[rel=preload]
+- enabling async CSS loading in browsers that do not support rel=preload
+- applying rel preload css once loaded, whether supported or not.
+*/ -->
+<script>
+(function( w ){
+	"use strict";
+	// rel=preload support test
+	if( !w.loadCSS ){
+		w.loadCSS = function(){};
+	}
+	// define on the loadCSS obj
+	var rp = loadCSS.relpreload = {};
+	// rel=preload feature support test
+	// runs once and returns a function for compat purposes
+	rp.support = (function(){
+		var ret;
+		try {
+			ret = w.document.createElement( "link" ).relList.supports( "preload" );
+		} catch (e) {
+			ret = false;
+		}
+		return function(){
+			return ret;
+		};
+	})();
+
+	// if preload isn't supported, get an asynchronous load by using a non-matching media attribute
+	// then change that media back to its intended value on load
+	rp.bindMediaToggle = function( link ){
+		// remember existing media attr for ultimate state, or default to 'all'
+		var finalMedia = link.media || "all";
+
+		function enableStylesheet(){
+			link.media = finalMedia;
+		}
+
+		// bind load handlers to enable media
+		if( link.addEventListener ){
+			link.addEventListener( "load", enableStylesheet );
+		} else if( link.attachEvent ){
+			link.attachEvent( "onload", enableStylesheet );
+		}
+
+		// Set rel and non-applicable media type to start an async request
+		// note: timeout allows this to happen async to let rendering continue in IE
+		setTimeout(function(){
+			link.rel = "stylesheet";
+			link.media = "only x";
+		});
+		// also enable media after 3 seconds,
+		// which will catch very old browsers (android 2.x, old firefox) that don't support onload on link
+		setTimeout( enableStylesheet, 3000 );
+	};
+
+	// loop through link elements in DOM
+	rp.poly = function(){
+		// double check this to prevent external calls from running
+		if( rp.support() ){
+			return;
+		}
+		var links = w.document.getElementsByTagName( "link" );
+		for( var i = 0; i < links.length; i++ ){
+			var link = links[ i ];
+			// qualify links to those with rel=preload and as=style attrs
+			if( link.rel === "preload" && link.getAttribute( "as" ) === "style" && !link.getAttribute( "data-loadcss" ) ){
+				// prevent rerunning on link
+				link.setAttribute( "data-loadcss", true );
+				// bind listeners to toggle media back
+				rp.bindMediaToggle( link );
+			}
+		}
+	};
+
+	// if unsupported, run the polyfill
+	if( !rp.support() ){
+		// run once at least
+		rp.poly();
+
+		// rerun poly on an interval until onload
+		var run = w.setInterval( rp.poly, 500 );
+		if( w.addEventListener ){
+			w.addEventListener( "load", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		} else if( w.attachEvent ){
+			w.attachEvent( "onload", function(){
+				rp.poly();
+				w.clearInterval( run );
+			} );
+		}
+	}
+
+
+	// commonjs
+	if( typeof exports !== "undefined" ){
+		exports.loadCSS = loadCSS;
+	}
+	else {
+		w.loadCSS = loadCSS;
+	}
+}( typeof global !== "undefined" ? global : this ) );
+</script>
+
+    <link rel="icon" href= "/assets/favicon.ico" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js" as="script" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js" as="script" />
+    <link rel="preload" href="/scripts/main.js" as="script" />
+    <link rel="preload" as="font" href="/font/Oswald-Regular.ttf" crossorigin>
+    <link rel="preload" as="font" href="https://at.alicdn.com/t/font_327081_1dta1rlogw17zaor.woff" crossorigin>
+    
+    <!-- fancybox -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.js" defer></script>
+    <!-- 百度统计  -->
+    
+    <!-- 谷歌统计  -->
+    
+</head>
+
+    
+        <body class="post-body">
+    
+    
+<header class="header">
+
+    <div class="read-progress"></div>
+    <div class="header-sidebar-menu">&#xe775;</div>
+    <!-- post页的toggle banner  -->
+    
+    <div class="banner">
+            <div class="blog-title">
+                <a href="/" >xiejunyi&#39;s blog.</a>
+            </div>
+            <div class="post-title">
+                <a href="#" class="post-name">dyld(2) lazy bind 和 dyld_stub_binder</a>
+            </div>
+    </div>
+    
+    <a class="home-link" href=/>xiejunyi's blog.</a>
+</header>
+    <div class="wrapper">
+        <div class="site-intro" style="
+
+
+
+
+
+
+
+height:50vh;
+">
+    
+    <!-- 主页  -->
+    
+    
+    <!-- 404页  -->
+            
+    <div class="site-intro-placeholder"></div>
+    <div class="site-intro-img" style="background-image: url(/intro/post-bg.jpg)"></div>
+    <div class="site-intro-meta">
+        <!-- 标题  -->
+        <h1 class="intro-title">
+            <!-- 主页  -->
+            
+            dyld(2) lazy bind 和 dyld_stub_binder
+            <!-- 404 -->
+            
+        </h1>
+        <!-- 副标题 -->
+        <p class="intro-subtitle">
+            <!-- 主页副标题  -->
+            
+            
+            <!-- 404 -->
+            
+        </p>
+        <!-- 文章页meta -->
+        
+            <div class="post-intros">
+                <!-- 文章页标签  -->
+                
+                
+                    <div class="post-intro-read">
+                        <span>Word count: <span class="post-count word-count">837</span>Reading time: <span class="post-count reading-time">4 min</span></span>
+                    </div>
+                
+                <div class="post-intro-meta">
+                    <span class="post-intro-calander iconfont-archer">&#xe676;</span>
+                    <span class="post-intro-time">2020/03/04</span>
+                    
+                    <span id="busuanzi_container_page_pv" class="busuanzi-pv">
+                        <span class="iconfont-archer">&#xe602;</span>
+                        <span id="busuanzi_value_page_pv"></span>
+                    </span>
+                    
+                    <span class="shareWrapper">
+                        <span class="iconfont-archer shareIcon">&#xe71d;</span>
+                        <span class="shareText">Share</span>
+                        <ul class="shareList">
+                            <li class="iconfont-archer share-qr" data-type="qr">&#xe75b;
+                                <div class="share-qrcode"></div>
+                            </li>
+                            <li class="iconfont-archer" data-type="weibo">&#xe619;</li>
+                            <li class="iconfont-archer" data-type="qzone">&#xe62e;</li>
+                            <li class="iconfont-archer" data-type="twitter">&#xe634;</li>
+                            <li class="iconfont-archer" data-type="facebook">&#xe67a;</li>
+                        </ul>
+                    </span>
+                </div>
+            </div>
+        
+    </div>
+</div>
+        <script>
+ 
+  // get user agent
+  var browser = {
+    versions: function () {
+      var u = window.navigator.userAgent;
+      return {
+        userAgent: u,
+        trident: u.indexOf('Trident') > -1, //IE内核
+        presto: u.indexOf('Presto') > -1, //opera内核
+        webKit: u.indexOf('AppleWebKit') > -1, //苹果、谷歌内核
+        gecko: u.indexOf('Gecko') > -1 && u.indexOf('KHTML') == -1, //火狐内核
+        mobile: !!u.match(/AppleWebKit.*Mobile.*/), //是否为移动终端
+        ios: !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/), //ios终端
+        android: u.indexOf('Android') > -1 || u.indexOf('Linux') > -1, //android终端或者uc浏览器
+        iPhone: u.indexOf('iPhone') > -1 || u.indexOf('Mac') > -1, //是否为iPhone或者安卓QQ浏览器
+        iPad: u.indexOf('iPad') > -1, //是否为iPad
+        webApp: u.indexOf('Safari') == -1, //是否为web应用程序，没有头部与底部
+        weixin: u.indexOf('MicroMessenger') == -1, //是否为微信浏览器
+        uc: u.indexOf('UCBrowser') > -1 //是否为android下的UC浏览器
+      };
+    }()
+  }
+  console.log("userAgent:" + browser.versions.userAgent);
+
+  // callback
+  function fontLoaded() {
+    console.log('font loaded');
+    if (document.getElementsByClassName('site-intro-meta')) {
+      document.getElementsByClassName('intro-title')[0].classList.add('intro-fade-in');
+      document.getElementsByClassName('intro-subtitle')[0].classList.add('intro-fade-in');
+      var postIntros = document.getElementsByClassName('post-intros')[0]
+      if (postIntros) {
+        postIntros.classList.add('post-fade-in');
+      }
+    }
+  }
+
+  // UC不支持跨域，所以直接显示
+  function asyncCb(){
+    if (browser.versions.uc) {
+      console.log("UCBrowser");
+      fontLoaded();
+    } else {
+      WebFont.load({
+        custom: {
+          families: ['Oswald-Regular']
+        },
+        loading: function () {  //所有字体开始加载
+          // console.log('loading');
+        },
+        active: function () {  //所有字体已渲染
+          fontLoaded();
+        },
+        inactive: function () { //字体预加载失败，无效字体或浏览器不支持加载
+          console.log('inactive: timeout');
+          fontLoaded();
+        },
+        timeout: 5000 // Set the timeout to two seconds
+      });
+    }
+  }
+
+  function asyncErr(){
+    console.warn('script load from CDN failed, will load local script')
+  }
+
+  // load webfont-loader async, and add callback function
+  function async(u, cb, err) {
+    var d = document, t = 'script',
+      o = d.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    o.src = u;
+    if (cb) { o.addEventListener('load', function (e) { cb(null, e); }, false); }
+    if (err) { o.addEventListener('error', function (e) { err(null, e); }, false); }
+    s.parentNode.insertBefore(o, s);
+  }
+
+  var asyncLoadWithFallBack = function(arr, success, reject) {
+      var currReject = function(){
+        reject()
+        arr.shift()
+        if(arr.length)
+          async(arr[0], success, currReject)
+        }
+
+      async(arr[0], success, currReject)
+  }
+
+  asyncLoadWithFallBack([
+    "https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.min.js", 
+    "https://cdn.bootcss.com/webfont/1.6.28/webfontloader.js",
+    "/lib/webfontloader.min.js"
+  ], asyncCb, asyncErr)
+</script>        
+        <img class="loading" src="/assets/loading.svg" style="display: block; margin: 6rem auto 0 auto; width: 6rem; height: 6rem;" />
+        <div class="container container-unloaded">
+            <main class="main post-page">
+    <article class="article-entry">
+        <p>dyld会在程序首次执行lazy symbol的时候对其进行绑定操作。这片文章分析一下绑定的过程。</p>
+<figure class="highlight x86asm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="symbol">_main:</span></span><br><span class="line">...</span><br><span class="line">0000000100000f6f         <span class="keyword">call</span>       imp___stubs__objc_alloc</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>可以看到 当调用 objc_alloc 函数时，实际跳转到 <code>imp___stubs__objc_alloc</code></p>
+<figure class="highlight armasm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="symbol">imp___stubs__objc_alloc</span>:</span><br><span class="line"><span class="number">00000001000065</span><span class="built_in">d0</span>         <span class="keyword">nop </span>                                                   <span class="comment">; CODE XREF=-[AppDelegate application:configurationForConnectingSceneSession:options:]+132</span></span><br><span class="line"><span class="number">00000001000065</span><span class="built_in">d4</span>         <span class="keyword">ldr </span>       x16, <span class="number">#0x100008010</span></span><br><span class="line"><span class="number">00000001000065</span><span class="built_in">d8</span>         <span class="keyword">br </span>        x16</span><br></pre></td></tr></table></figure>
+
+<p>其指令会跳转到 lazy symbol ptr section 中 0x100008010 地址的 0000000100006648</p>
+<figure class="highlight armasm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">; Section __la_symbol_ptr</span></span><br><span class="line"><span class="comment">; Range: [0x100008010; 0x100008050[ (64 bytes)</span></span><br><span class="line"><span class="comment">; File offset : [32784; 32848[ (64 bytes)</span></span><br><span class="line"><span class="comment">; Flags: 0x7</span></span><br><span class="line"><span class="comment">;   S_LAZY_SYMBOL_POINTERS</span></span><br><span class="line"></span><br><span class="line"><span class="symbol">_objc_alloc_ptr</span>:</span><br><span class="line"><span class="number">0000000100008010</span>         dq         <span class="number">0x0000000100006648</span>                          <span class="comment">; DATA XREF=imp___stubs__objc_alloc+4</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight x86asm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="symbol">sub_100006648:</span></span><br><span class="line"><span class="number">0000000100006648</span>         ldr        w16, #<span class="number">0x100006650</span>                           <span class="comment">; DATA XREF=_objc_alloc_ptr</span></span><br><span class="line">000000010000664c         b          <span class="number">0x100006630</span></span><br><span class="line"><span class="number">0000000100006650</span>         <span class="built_in">db</span>  <span class="number">0x00</span> <span class="comment">; '.'                                         ; DATA XREF=sub_100006648</span></span><br><span class="line"><span class="number">0000000100006651</span>         <span class="built_in">db</span>  <span class="number">0x00</span> <span class="comment">; '.'</span></span><br><span class="line"><span class="number">0000000100006652</span>         <span class="built_in">db</span>  <span class="number">0x00</span> <span class="comment">; '.'</span></span><br><span class="line"><span class="number">0000000100006653</span>         <span class="built_in">db</span>  <span class="number">0x00</span> <span class="comment">; '.'</span></span><br></pre></td></tr></table></figure>
+
+<p>随后跳转到  loc_100006630， 这一步存储必要的信息，调用dyld内部的dyld_stub_binder函数。</p>
+<figure class="highlight x86asm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">; Section __stub_helper</span></span><br><span class="line"><span class="comment">; Range: [0x100006630; 0x1000066a8[ (120 bytes)</span></span><br><span class="line"><span class="comment">; File offset : [26160; 26280[ (120 bytes)</span></span><br><span class="line"><span class="comment">; Flags: 0x80000400</span></span><br><span class="line"><span class="comment">;   S_REGULAR</span></span><br><span class="line"><span class="comment">;   S_ATTR_PURE_INSTRUCTIONS</span></span><br><span class="line"><span class="comment">;   S_ATTR_SOME_INSTRUCTIONS</span></span><br><span class="line"></span><br><span class="line"><span class="symbol">loc_100006630:</span></span><br><span class="line"><span class="number">0000000100006630</span>         adr        x17, #<span class="number">0x100008008</span>                           <span class="comment">; CODE XREF=sub_100006648+4, sub_100006654+4, sub_100006660+4, sub_10000666c+4, sub_100006678+4, sub_100006684+4, sub_100006690+4</span></span><br><span class="line"><span class="number">0000000100006634</span>         <span class="keyword">nop</span></span><br><span class="line"><span class="number">0000000100006638</span>         stp        x16, x17, [<span class="built_in">sp</span>, #-<span class="number">0x10</span>]!</span><br><span class="line">000000010000663c         <span class="keyword">nop</span></span><br><span class="line"><span class="number">0000000100006640</span>         ldr        x16, #<span class="number">0x100008000</span></span><br><span class="line"><span class="number">0000000100006644</span>         br         x16</span><br><span class="line"></span><br><span class="line"><span class="symbol">dyld_stub_binder_100008000:</span></span><br><span class="line"><span class="number">0000000100008000</span>         <span class="built_in">dq</span>         dyld_stub_binder                            <span class="comment">; DATA XREF=-[AppDelegate application:configurationForConnectingSceneSession:options:]+180, 0x100006640</span></span><br><span class="line"><span class="number">0000000100008008</span>         <span class="built_in">dq</span>         <span class="number">0x0000000000000000</span>                          <span class="comment">; DATA XREF=0x100006630</span></span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>注意 <code>0000000100006638         stp        x16, x17, [sp, #-0x10]!</code>, 这里有个 bind info offset(x16) 压入到栈中的操作。</li>
+<li>x17 的内容为 0x0000000000000000。根据下文 dyld_stub_binder , 是address of ImageLoader cache。是dyld自行修改的内容。</li>
+<li>跳转到 0x100008000地址 的 dyld_stub_binder</li>
+</ol>
+<p>上面的内容网上很多，下面来看一下dyld是怎么利用macho linkedit 段的数据，进行符号绑定的。</p>
+<h3 id="1-dyld-stub-binder"><a href="#1-dyld-stub-binder" class="headerlink" title="(1) dyld_stub_binder"></a>(1) dyld_stub_binder</h3><p>程序源码如下， 注意关键进行绑定操作的函数 __Z21_dyld_fast_stub_entryPvl dyld::fastBindLazySymbol。读了一下指令，可以和上文压栈的寄存器对应上。</p>
+<figure class="highlight armasm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line"><span class="symbol">#if</span> __arm64__</span><br><span class="line"> <span class="comment">/*    </span></span><br><span class="line"><span class="comment">  * sp+0 lazy binding info offset</span></span><br><span class="line"><span class="comment">  * sp+8 address of ImageLoader cache // 从哪里来的呢</span></span><br><span class="line"><span class="comment">  */</span></span><br><span class="line"><span class="symbol">.text</span></span><br><span class="line"><span class="symbol">.align</span> <span class="number">2</span></span><br><span class="line"><span class="symbol">.globl</span> dyld_stub_binder</span><br><span class="line"><span class="symbol">dyld_stub_binder</span>:</span><br><span class="line"><span class="symbol">stp</span> <span class="built_in">fp</span>, <span class="built_in">lr</span>, [<span class="built_in">sp</span>, #-<span class="number">16</span>]!</span><br><span class="line"><span class="keyword">mov </span><span class="built_in">fp</span>, <span class="built_in">sp</span></span><br><span class="line"><span class="keyword">sub </span><span class="built_in">sp</span>, <span class="built_in">sp</span>, <span class="number">#240</span></span><br><span class="line"><span class="symbol">stp</span> x0,x1, [<span class="built_in">fp</span>, #-<span class="number">16</span>] <span class="comment">; x0-x7 are int parameter registers</span></span><br><span class="line"><span class="symbol">stp</span> x2,x3, [<span class="built_in">fp</span>, #-<span class="number">32</span>]</span><br><span class="line"><span class="symbol">stp</span> x4,x5, [<span class="built_in">fp</span>, #-<span class="number">48</span>]</span><br><span class="line"><span class="symbol">stp</span> x6,x7, [<span class="built_in">fp</span>, #-<span class="number">64</span>]</span><br><span class="line"><span class="symbol">stp</span> x8,x9, [<span class="built_in">fp</span>, #-<span class="number">80</span>] <span class="comment">; x8 is used for struct returns</span></span><br><span class="line"><span class="symbol">stp</span> <span class="built_in">q0</span>,<span class="built_in">q1</span>, [<span class="built_in">fp</span>, #-<span class="number">128</span>] <span class="comment">; q0-q7 are vector/fp parameter registers</span></span><br><span class="line"><span class="symbol">stp</span> <span class="built_in">q2</span>,<span class="built_in">q3</span>, [<span class="built_in">fp</span>, #-<span class="number">160</span>]</span><br><span class="line"><span class="symbol">stp</span> <span class="built_in">q4</span>,<span class="built_in">q5</span>, [<span class="built_in">fp</span>, #-<span class="number">192</span>]</span><br><span class="line"><span class="symbol">stp</span> <span class="built_in">q6</span>,<span class="built_in">q7</span>, [<span class="built_in">fp</span>, #-<span class="number">224</span>]</span><br><span class="line"></span><br><span class="line"><span class="keyword">ldr </span>x0, [<span class="built_in">fp</span>, <span class="number">#24</span>] <span class="comment">; move address ImageLoader cache to 1st parameter</span></span><br><span class="line"><span class="keyword">ldr </span>x1, [<span class="built_in">fp</span>, <span class="number">#16</span>] <span class="comment">; move lazy info offset 2nd parameter</span></span><br><span class="line"><span class="comment">; call dyld::fastBindLazySymbol(loadercache, lazyinfo)</span></span><br><span class="line"><span class="keyword">bl </span>__Z21_dyld_fast_stub_entryPvl</span><br><span class="line"><span class="keyword">mov </span>x16,x0 <span class="comment">; save target function address in lr</span></span><br><span class="line"><span class="comment">; restore parameter registers</span></span><br><span class="line"><span class="symbol">ldp</span> x0,x1, [<span class="built_in">fp</span>, #-<span class="number">16</span>]</span><br><span class="line"><span class="symbol">ldp</span> x2,x3, [<span class="built_in">fp</span>, #-<span class="number">32</span>]</span><br><span class="line"><span class="symbol">ldp</span> x4,x5, [<span class="built_in">fp</span>, #-<span class="number">48</span>]</span><br><span class="line"><span class="symbol">ldp</span> x6,x7, [<span class="built_in">fp</span>, #-<span class="number">64</span>]</span><br><span class="line"><span class="symbol">ldp</span> x8,x9, [<span class="built_in">fp</span>, #-<span class="number">80</span>]</span><br><span class="line"><span class="symbol">ldp</span> <span class="built_in">q0</span>,<span class="built_in">q1</span>, [<span class="built_in">fp</span>, #-<span class="number">128</span>]</span><br><span class="line"><span class="symbol">ldp</span> <span class="built_in">q2</span>,<span class="built_in">q3</span>, [<span class="built_in">fp</span>, #-<span class="number">160</span>]</span><br><span class="line"><span class="symbol">ldp</span> <span class="built_in">q4</span>,<span class="built_in">q5</span>, [<span class="built_in">fp</span>, #-<span class="number">192</span>]</span><br><span class="line"><span class="symbol">ldp</span> <span class="built_in">q6</span>,<span class="built_in">q7</span>, [<span class="built_in">fp</span>, #-<span class="number">224</span>]</span><br><span class="line"><span class="keyword">mov </span><span class="built_in">sp</span>, <span class="built_in">fp</span></span><br><span class="line"><span class="symbol">ldp</span> <span class="built_in">fp</span>, <span class="built_in">lr</span>, [<span class="built_in">sp</span>], <span class="number">#16</span></span><br><span class="line"><span class="keyword">add </span><span class="built_in">sp</span>, <span class="built_in">sp</span>, <span class="number">#16</span> <span class="comment">; remove meta-parameters</span></span><br><span class="line"><span class="symbol">#if</span> __arm64e__</span><br><span class="line">    // Note arm64e executables will never hit this line as they don<span class="string">'t have lazy binding.</span></span><br><span class="line"><span class="string">    // However, arm64 binaries running on an arm64e system will hit this line but the</span></span><br><span class="line"><span class="string">    // authentication won'</span>t have any effect there.</span><br><span class="line"><span class="keyword">braaz </span>  x16</span><br><span class="line"><span class="symbol">#else</span></span><br><span class="line"><span class="keyword">br </span>     x16</span><br><span class="line"><span class="symbol">#endif</span></span><br><span class="line"></span><br><span class="line"><span class="symbol">#endif</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="2-dyld-源码查看一下-fastBindLazySymbol-的实现方式"><a href="#2-dyld-源码查看一下-fastBindLazySymbol-的实现方式" class="headerlink" title="(2) dyld 源码查看一下 fastBindLazySymbol 的实现方式"></a>(2) dyld 源码查看一下 fastBindLazySymbol 的实现方式</h3><h3 id="2-1-lazy-bind-info-简介"><a href="#2-1-lazy-bind-info-简介" class="headerlink" title="(2.1) lazy bind info 简介:"></a>(2.1) lazy bind info 简介:</h3><p>简要介绍一下lazy bind info主要包含的内容信息。这是dyld绑定时主要利用的信息。</p>
+<ul>
+<li>BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB: segment(1) //MachO中第几个Segement</li>
+<li>offset(224) // 偏移量224。根据segment起始地址+ 偏移量，可以找到lazy symbol ptr section 中 pointer 对应的位置</li>
+<li>dylib(4)动态库加载序号。LC_LOAD_DYLIB.</li>
+</ul>
+<h3 id="2-2-doBindFastLazySymbol的过程"><a href="#2-2-doBindFastLazySymbol的过程" class="headerlink" title="(2.2)doBindFastLazySymbol的过程"></a>(2.2)doBindFastLazySymbol的过程</h3><ol>
+<li>getLazyBindingInfo(lazyBindingInfoOffset, start, end, &amp;segIndex, &amp;segOffset, &amp;libraryOrdinal, &amp;symbolName, &amp;doneAfterBind)// 获取lazy bind 信息</li>
+<li>uintptr_t address = segActualLoadAddress(segIndex) + segOffset; //获取需要绑定的lazy symbol ptr的地址 </li>
+<li>result = bindAt(context, this, address, BIND_TYPE_POINTER, symbolName, 0, 0, libraryOrdinal, NULL, lazy , NULL, true);// 绑定</li>
+</ol>
+<h3 id="2-3-uintptr-t-ImageLoaderMachOCompressed-resolve的过程"><a href="#2-3-uintptr-t-ImageLoaderMachOCompressed-resolve的过程" class="headerlink" title="(2.3)uintptr_t ImageLoaderMachOCompressed::resolve的过程"></a>(2.3)uintptr_t ImageLoaderMachOCompressed::resolve的过程</h3><ol>
+<li>*targetImage = libImage((unsigned int)libraryOrdinal-1);// 获取外部符号所在的动态库</li>
+<li>symbolAddress = resolveTwolevel(context, symbolName, *targetImage, this, (unsigned)libraryOrdinal, weak_import, runResolver, targetImage); // 根据符号名称找到外部符号地址。通过export_info 进行快速查找。</li>
+</ol>
+<h3 id="2-4-uintptr-t-ImageLoaderMachO-bindLocation的过程"><a href="#2-4-uintptr-t-ImageLoaderMachO-bindLocation的过程" class="headerlink" title="(2.4)uintptr_t ImageLoaderMachO::bindLocation的过程"></a>(2.4)uintptr_t ImageLoaderMachO::bindLocation的过程</h3><ol>
+<li>将lazy symbol ptr地址的值设置为 symbolAddress </li>
+</ol>
+
+    </article>
+    <!-- license  -->
+    
+        <div class="license-wrapper">
+            <p>Author：<a href="http://yoursite.com">junyixie</a>
+            <p>原文链接：<a href="http://yoursite.com/2020/03/04/lazybind/">http://yoursite.com/2020/03/04/lazybind/</a>
+            <p>发表日期：<a href="http://yoursite.com/2020/03/04/lazybind/">March 4th 2020, 8:56:28 pm</a>
+            <p>更新日期：<a href="http://yoursite.com/2020/03/04/lazybind/">March 26th 2020, 11:22:50 pm</a>
+            <p>版权声明：本文采用<a rel="license noopener" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>进行许可</p>
+        </div>
+    
+    <!-- paginator  -->
+    <ul class="post-paginator">
+        <li class="next">
+            
+                <div class="nextSlogan">Next Post</div>
+                <a href= "/2020/03/19/cocoapods-new-feature/" title= "cocoapods 新feature 开发 Example, On Demand Resource">
+                    <div class="nextTitle">cocoapods 新feature 开发 Example, On Demand Resource</div>
+                </a>
+            
+        </li>
+        <li class="previous">
+            
+                <div class="prevSlogan">Previous Post</div>
+                <a href= "/2020/03/03/macholinkedit/" title= "dyld(1) MachO Linkedit 段">
+                    <div class="prevTitle">dyld(1) MachO Linkedit 段</div>
+                </a>
+            
+        </li>
+    </ul>
+    <!-- 评论插件 -->
+    <!-- 来必力City版安装代码 -->
+
+<!-- City版安装代码已完成 -->
+    
+    
+    <!-- gitalk评论 -->
+
+    <!-- utteranc评论 -->
+
+    <!-- partial('_partial/comment/changyan') -->
+    <!--PC版-->
+
+
+    
+    
+
+    <!-- 评论 -->
+</main>
+            <!-- profile -->
+            
+        </div>
+        <footer class="footer footer-unloaded">
+    <!-- social  -->
+    
+    <div class="social">
+        
+    
+        
+            
+                <a href="mailto:xie.junyi@outlook.com" target="_blank" rel="noopener" class="iconfont-archer email" title=email ></a>
+            
+        
+    
+        
+            
+                <a href="//github.com/junyixie" class="iconfont-archer github" target="_blank" title=github></a>
+            
+        
+    
+        
+            
+                <span class="iconfont-archer wechat" title=wechat>
+                  
+                  <img class="profile-qr" src="/assets/example_qr.png" />
+                </span>
+            
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+
+    </div>
+    
+    <!-- powered by Hexo  -->
+    <div class="copyright">
+        <span id="hexo-power">Powered by <a href="https://hexo.io/" target="_blank">Hexo</a></span><span class="iconfont-archer power">&#xe635;</span><span id="theme-info">theme <a href="https://github.com/fi3ework/hexo-theme-archer" target="_blank">Archer</a></span>
+    </div>
+    <!-- 不蒜子  -->
+    
+    <div class="busuanzi-container">
+    
+     
+    <span id="busuanzi_container_site_pv">PV: <span id="busuanzi_value_site_pv"></span> :)</span>
+    
+    </div>
+    
+</footer>
+    </div>
+    <!-- toc -->
+    
+    <div class="toc-wrapper" style=
+    
+
+
+
+
+
+
+
+top:50vh;
+
+    >
+        <div class="toc-catalog">
+            <span class="iconfont-archer catalog-icon">&#xe613;</span><span>CATALOG</span>
+        </div>
+        <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-dyld-stub-binder"><span class="toc-number">1.</span> <span class="toc-text">(1) dyld_stub_binder</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-dyld-源码查看一下-fastBindLazySymbol-的实现方式"><span class="toc-number">2.</span> <span class="toc-text">(2) dyld 源码查看一下 fastBindLazySymbol 的实现方式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-lazy-bind-info-简介"><span class="toc-number">3.</span> <span class="toc-text">(2.1) lazy bind info 简介:</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-doBindFastLazySymbol的过程"><span class="toc-number">4.</span> <span class="toc-text">(2.2)doBindFastLazySymbol的过程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-uintptr-t-ImageLoaderMachOCompressed-resolve的过程"><span class="toc-number">5.</span> <span class="toc-text">(2.3)uintptr_t ImageLoaderMachOCompressed::resolve的过程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-4-uintptr-t-ImageLoaderMachO-bindLocation的过程"><span class="toc-number">6.</span> <span class="toc-text">(2.4)uintptr_t ImageLoaderMachO::bindLocation的过程</span></a></li></ol>
+    </div>
+    
+    <div class="back-top iconfont-archer">&#xe639;</div>
+    <div class="sidebar sidebar-hide">
+    <ul class="sidebar-tabs sidebar-tabs-active-0">
+        <li class="sidebar-tab-archives"><span class="iconfont-archer">&#xe67d;</span><span class="tab-name">Archive</span></li>
+        <li class="sidebar-tab-tags"><span class="iconfont-archer">&#xe61b;</span><span class="tab-name">Tag</span></li>
+        <li class="sidebar-tab-categories"><span class="iconfont-archer">&#xe666;</span><span class="tab-name">Cate</span></li>
+    </ul>
+    <div class="sidebar-content sidebar-content-show-archive">
+          <div class="sidebar-panel-archives">
+    <!-- 在ejs中将archive按照时间排序 -->
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <div class="total-and-search">
+        <div class="total-archive">
+        Total : 29
+        </div>
+        <!-- search  -->
+        
+    </div>
+    
+    <div class="post-archive">
+    
+    
+    
+    
+    <div class="archive-year"> 2020 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2020/10/05/cpythonstrip/" >cpython3.8瘦身到0.95mb</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2020/04/10/objcblockimp/" >imp_implementationWithBlock 的内部实现 trampoline</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/08</span><a class="archive-post-title" href= "/2020/04/08/lliread/" >lli源码阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/01</span><a class="archive-post-title" href= "/2020/04/01/MachOObjC/" >MachO（一） ObjC类结构的加载</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/25</span><a class="archive-post-title" href= "/2020/03/25/DobbyRead/" >Dobby源码学习（一） Inline Hook</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/19</span><a class="archive-post-title" href= "/2020/03/19/cocoapods-new-feature/" >cocoapods 新feature 开发 Example, On Demand Resource</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/04</span><a class="archive-post-title" href= "/2020/03/04/lazybind/" >dyld(2) lazy bind 和 dyld_stub_binder</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">03/03</span><a class="archive-post-title" href= "/2020/03/03/macholinkedit/" >dyld(1) MachO Linkedit 段</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/19</span><a class="archive-post-title" href= "/2020/02/19/crashruntimeinfo/" >Block ABI 文档阅读</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/12</span><a class="archive-post-title" href= "/2020/02/12/iosdevdebug/" >iOS开发必备的问题定位调试技巧</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2019 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">11/26</span><a class="archive-post-title" href= "/2019/11/26/projectpodenv/" >CocoaPods插件开发原理(二) 定制项目CocoaPods插件环境</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/05</span><a class="archive-post-title" href= "/2019/10/05/cocoapodsdev/" >CocoaPods插件开发原理(一) CocoaPods做了啥</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/28</span><a class="archive-post-title" href= "/2019/09/28/CrashMonitorSystem/" >崩溃捕获系统的原理（一）异常信号</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2018 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/30</span><a class="archive-post-title" href= "/2018/09/30/dwarf%E5%92%8C%E7%AC%A6%E5%8F%B7%E5%8C%96/" >DWARF和符号化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/16</span><a class="archive-post-title" href= "/2018/09/16/CrashSymbolicateSystemDesign/" >APM Crash系统</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">06/13</span><a class="archive-post-title" href= "/2018/06/13/libmalloc/" >libmalloc "malloc" 探究</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/13</span><a class="archive-post-title" href= "/2018/04/13/dependency/" >关于架构和编码的思考</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/10</span><a class="archive-post-title" href= "/2018/04/10/iosoom/" >iOS OOM</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2018/01/15/sharedlibraryandpic/" >fishhook与共享库和PIC</a>
+        </li>
+    
+    
+    
+    
+    
+        </ul>
+    
+    <div class="archive-year"> 2017 </div>
+    <ul class="year-list">
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/24</span><a class="archive-post-title" href= "/2017/12/24/In-depthUnderStandingOfThreadSafety/" >理解线程安全</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">12/04</span><a class="archive-post-title" href= "/2017/12/04/safeSwizzleRSSwizzleAnalyze/" >Method Swizzling 的正确途径</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">10/27</span><a class="archive-post-title" href= "/2017/10/27/dyld3withappstart/" >链接和App启动速度优化</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">09/26</span><a class="archive-post-title" href= "/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/" >理解HTTPS</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">05/01</span><a class="archive-post-title" href= "/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/" >Objective-C 深入理解中的消息机制和方法调用</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">04/20</span><a class="archive-post-title" href= "/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/" >Cocoa 深入理解KVO</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/06</span><a class="archive-post-title" href= "/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/" >理解 Objc Runtime</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">02/01</span><a class="archive-post-title" href= "/2017/02/01/Objective-C-weak-%E5%85%B3%E9%94%AE%E5%AD%97-%E5%AE%9E%E7%8E%B0-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Objective-C weak 关键字 实现 源码分析</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/24</span><a class="archive-post-title" href= "/2017/01/24/iOS-Core-Animation%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/" >iOS Core Animation性能调优 笔记</a>
+        </li>
+    
+    
+        <li class="archive-post-item">
+            <span class="archive-post-date">01/15</span><a class="archive-post-title" href= "/2017/01/15/Aspects-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" >Aspects 源码分析</a>
+        </li>
+    
+    </div>
+  </div>
+        <div class="sidebar-panel-tags">
+    <div class="sidebar-tags-name">
+    
+    </div>
+    <div class="iconfont-archer sidebar-tags-empty">&#xe678;</div>
+    <div class="tag-load-fail" style="display: none; color: #ccc; font-size: 0.6rem;">
+    缺失模块。<br/>
+    1、请确保node版本大于6.2<br/>
+    2、在博客根目录（注意不是archer根目录）执行以下命令：<br/>
+    <span style="color: #f75357; font-size: 1rem; line-height: 2rem;">npm i hexo-generator-json-content --save</span><br/>
+    3、在根目录_config.yml里添加配置：
+    <pre style="color: #787878; font-size: 0.6rem;">
+jsonContent:
+  meta: false
+  pages: false
+  posts:
+    title: true
+    date: true
+    path: true
+    text: false
+    raw: false
+    content: false
+    slug: false
+    updated: false
+    comments: false
+    link: false
+    permalink: false
+    excerpt: false
+    categories: true
+    tags: true</pre>
+    </div> 
+    <div class="sidebar-tags-list"></div>
+</div>
+        <div class="sidebar-panel-categories">
+    <div class="sidebar-categories-name">
+    
+        <span class="sidebar-category-name" data-categories="iOS"><span class="iconfont-archer">&#xe60a;</span>iOS</span>
+    
+        <span class="sidebar-category-name" data-categories="源码分析"><span class="iconfont-archer">&#xe60a;</span>源码分析</span>
+    
+        <span class="sidebar-category-name" data-categories="APM"><span class="iconfont-archer">&#xe60a;</span>APM</span>
+    
+        <span class="sidebar-category-name" data-categories="设计架构"><span class="iconfont-archer">&#xe60a;</span>设计架构</span>
+    
+        <span class="sidebar-category-name" data-categories="研发流程"><span class="iconfont-archer">&#xe60a;</span>研发流程</span>
+    
+        <span class="sidebar-category-name" data-categories="Hook"><span class="iconfont-archer">&#xe60a;</span>Hook</span>
+    
+    </div>
+    <div class="iconfont-archer sidebar-categories-empty">&#xe678;</div>
+    <div class="sidebar-categories-list"></div>
+</div>
+    </div>
+</div> 
+    <script>
+    var siteMeta = {
+        root: "/",
+        author: "junyixie"
+    }
+</script>
+    <!-- CDN failover -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+    <script type="text/javascript">
+        if (typeof window.$ === 'undefined')
+        {
+            console.warn('jquery load from jsdelivr failed, will load local script')
+            document.write('<script src="/lib/jquery.min.js">\x3C/script>')
+        }
+    </script>
+    <script src="/scripts/main.js"></script>
+    <!-- algolia -->
+    
+    <!-- busuanzi  -->
+    
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    
+    <!-- CNZZ  -->
+    
+    </div>
+    <!-- async load share.js -->
+    
+        <script src="/scripts/share.js" async></script>    
+     
+    </body>
+</html>
+
+
