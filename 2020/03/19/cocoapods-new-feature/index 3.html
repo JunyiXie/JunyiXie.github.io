@@ -1,0 +1,701 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="xiejunyi Blog">
+    <title>cocoapods 新feature 开发 Example, On Demand Resource - xiejunyi Blog</title>
+    <meta name="author" content="junyixie">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"junyixie","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"articleBody":"2016年 苹果提出了On Demand Resource这一特性。目的在于下载游戏等资源减少包大小。不过CocoaPods尚未对该特性进行支持，这导致我们不能在Pod中使用On Demand Resource。对于组件化开发的app来说，没有这一功能的支持，基本无法使用On Demand Resource。\n因此针对CocoaPods开发了在 podspec 中 定义 on_demand_resources 字段，支持pod仓库使用On Demand Resource。\n例如这样\n1s.on_demand_resources  = [\"Fuck\", \"You\"]\n\nFeature 实现思路我们做的操作就是 用代码实现 在Xcode 中手动添加 On Demand Resource 的效果。\n\n拖一个文件进工程\n在Resource Tag 设置中添加该文件\n\n通过git diff, 我们可以发现对Xcode工程文件的改动在于：\n\n添加文件 PBXBuildFile PBXFileReference ，并打上tag\n新增 project 的 KnownAssetTags Attributed\n添加 该文件到 ResourcesBuildPhase\n\n我们只需要操作CocoaPods帮我们完成这些就搞定。\n12345678910111213141516171819202122/* Begin PBXBuildFile section */569293632420BFAA00E13D4A /* R1 in Resources */ = &#123;isa = PBXBuildFile; fileRef = 569293622420BFAA00E13D4A /* R1 */; settings = &#123;ASSET_TAGS = (OnDemand, ); &#125;; &#125;;/* Begin PBXFileReference section */569293622420BFAA00E13D4A /* R1 */ = &#123;isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = R1; sourceTree = \"&lt;group&gt;\"; &#125;;A927A3B416DCDE828F76E9A4 /* fuck */ = &#123;isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = fuck; path = \"../../CocoaPodsTestLibrary-master/fuck\"; sourceTree = \"&lt;group&gt;\"; &#125;;/* Begin PBXProject section */\t5692933E2420BEDF00E13D4A /* Project object */ = &#123;\t\tisa = PBXProject;\t\tattributes = &#123;\t\t\tKnownAssetTags = (\t\t\t\tOnDemand,);/* Begin PBXResourcesBuildPhase section */\t569293442420BEDF00E13D4A /* Resources */ = &#123;\t\tisa = PBXResourcesBuildPhase;\t\tbuildActionMask = 2147483647;\t\tfiles = (\t\t\t569293632420BFAA00E13D4A /* R1 in Resources */,);\n\n实现哈哈 像我这种Command Copy Paste 高手，做需求靠抄就行了。首先确定要抄什么！ \n\non_demand_resources 的 语法看起来和 resources 有点像。。 podspec 的 dsl 就抄他怎么实现的。抄他！\n文件添加到工程和 cocoapods将 xcconfig 添加到工程里比较像，抄他！！\n文件添加到build phase 并且打标签 和 添加资源文件比较像，抄他！！！\n\n一般iOS开发基本不会熟悉CocoaPods的源码，又是Ruby写的… 如何调试看一下我以前的文章。如何分析调试工程也参考我之前的文章。\n新增Podspec DSL我找了一个类似新增podspec语法的 pull request, 大致知道了新增语法该该什么。\n\ndsl.rb \nlinter.rb \nspecification.rb \n\n首先要定位到CocoaPods中对 podspec 的处理流程，我直接写个错误的语法，通过报错的调用栈定位到了位置。\n发现CocoaPods 将 Podspec中的内容 当作Ruby代码去执行 (ruby 的 eval)。知道了这个，就很容易摸清楚 podspec dsl 如何实现的了, 可以直接调试。通过调试，发现dsl的定义在 Core/lib/specification/dsl.rb中定义的。OK照葫芦画瓢，复制粘贴一下 resource 的 抄上…\ndsl 定义\n12345678910111213141516171819# @!method on_demand_resources=(on_demand_resources)##   A list of on_demand_resources that should be copied into the target bundle.##   @example##     spec.on_demand_resources = 'Resources/HockeySDK.bundle'##   @example##     spec.on_demand_resources = ['Images/*.png', 'Sounds/*']##   @param  [String, Array&lt;String&gt;] resources#           The on_demand_resources shipped with the Pod.#attribute :on_demand_resources,          :container     =&gt; Array,          :file_patterns =&gt; true,          :singularize   =&gt; true\n\npodspec 数据消费和lint\n12345678910# @return [Array&lt;String&gt;] A hash where the key represents the#         paths of the on_demand_resources to copy and the values the paths of#         the on_demand_resources that should be copied.#spec_attr_accessor :on_demand_resources# Performs validations related to the `on_demand_resources` attribute.#def _validate_on_demand_resources(on_demand_resource)end\n\n添加 On Demand Resource 文件哎，通过调试，找到了 cocoapods 集成Pods 到 Xcode Target 的关键文件。lib/cocoapods/installer/user_project_integrator/target_integrator.rb。 之后的操作又是通过调试和代码分析找到类似的功能如何实现，去理解CocoaPods的整个架构，再来实现我们的功能。CocoaPods的设计确实十分优秀，改的很爽。\n1234567891011121314151617181920212223242526272829303132333435363738394041424344# Integrates the targets of the user projects with the on demand resources## @return [void]#def add_on_demand_resources    attributes = target.user_project.root_object.attributes    asset_tags = (attributes[\"KnownAssetTags\"] ||= [])    unless asset_tags.include?(\"OnDemand\")    asset_tags &lt;&lt; \"OnDemand\"    end    attributes[\"KnownAssetTags\"] = asset_tags    target.user_project.root_object.attributes = attributes    on_demand_resources_group = target.user_project.main_group[\"on_demand_resources\"]    unless on_demand_resources_group    on_demand_resources_group = target.user_project.main_group.new_group(\"on_demand_resources\", target.sandbox.root)    end    pb_target = target.user_project.objects_by_uuid[target.user_target_uuids[0]]    old_on_demand_resource_file_refs = on_demand_resources_group.files    pb_target.remove_on_demand_resources(old_on_demand_resource_file_refs)    on_demand_resources_group.clear    on_demand_resource_file_refs = []    target.pod_targets.each do |pod_target|    pod_target.file_accessors.each &#123;|file_accessor|        file_accessor.on_demand_resources.each &#123;|on_demand_resource|        on_demand_resource_pathname = Pathname.new(File.expand_path(on_demand_resource))        file_ref = on_demand_resources_group.files.find &#123;|file| file.real_path == on_demand_resource_pathname&#125;        unless file_ref            file_ref = on_demand_resources_group.new_file(on_demand_resource)            on_demand_resource_file_refs &lt;&lt; file_ref        end        &#125;    &#125;    end    pb_target.add_on_demand_resources(on_demand_resource_file_refs)end\n\nlib/xcodeproj/project/object/native_target.rb\n1234567891011121314151617181920212223242526272829# remove on demand resource files to the resources build phase of the target.## @param  [Array&lt;PBXFileReference&gt;] on_demand_resource_file_references#         the files references of the on demand resources to the target.## @return [void]#def remove_on_demand_resources(on_demand_resource_file_references)    on_demand_resource_file_references.each do |file|    resources_build_phase.remove_file_reference(file)    endend# Adds on demand resource files to the resources build phase of the target.## @param  [Array&lt;PBXFileReference&gt;] on_demand_resource_file_references#         the files references of the on demand resources to the target.## @return [void]#def add_on_demand_resources(on_demand_resource_file_references)    on_demand_resource_file_references.each do |file|    next if resources_build_phase.include?(file)    build_file = project.new(PBXBuildFile)    build_file.file_ref = file    build_file.settings = (build_file.settings ||= &#123;&#125;).merge(&#123;\"ASSET_TAGS\" =&gt; [\"OnDemand\"]&#125;)    resources_build_phase.files &lt;&lt; build_file    endend\n\n分析阅读CocoaPods源码的几个关键名词PodTarget pod的targetAggregateTarget 需要集成pod的项目的target，例如我们app的targetSandbox CocoaPods对于 我们Pods 和 工程的 沙盒文件处理DSL podfile podspec中定义的语法defind_method CocoaPods 通过动态生成方法的方式，处理简单的语法\n","dateCreated":"2020-03-19T20:21:19+08:00","dateModified":"2020-03-19T21:07:54+08:00","datePublished":"2020-03-19T20:21:19+08:00","description":"","headline":"cocoapods 新feature 开发 Example, On Demand Resource","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://yoursite.com/2020/03/19/cocoapods-new-feature/"},"publisher":{"@type":"Organization","name":"junyixie","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"url":"http://yoursite.com/2020/03/19/cocoapods-new-feature/"}</script>
+    <meta name="description" content="2016年 苹果提出了On Demand Resource这一特性。目的在于下载游戏等资源减少包大小。不过CocoaPods尚未对该特性进行支持，这导致我们不能在Pod中使用On Demand Resource。对于组件化开发的app来说，没有这一功能的支持，基本无法使用On Demand Resource。 因此针对CocoaPods开发了在 podspec 中 定义 on_demand_res">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="cocoapods 新feature 开发 Example, On Demand Resource">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;03&#x2F;19&#x2F;cocoapods-new-feature&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="2016年 苹果提出了On Demand Resource这一特性。目的在于下载游戏等资源减少包大小。不过CocoaPods尚未对该特性进行支持，这导致我们不能在Pod中使用On Demand Resource。对于组件化开发的app来说，没有这一功能的支持，基本无法使用On Demand Resource。 因此针对CocoaPods开发了在 podspec 中 定义 on_demand_res">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2020-03-19T13:07:54.986Z">
+<meta name="twitter:card" content="summary">
+    
+    
+        
+    
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/all.css">
+    <link rel="stylesheet" href="/assets/css/jquery.fancybox.css">
+    <link rel="stylesheet" href="/assets/css/thumbs.css">
+    <link rel="stylesheet" href="/assets/css/tranquilpeak.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            xiejunyi Blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="Open the link: /#about"
+            >
+        
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="Home"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="Categories"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Categories</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="Tags"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Tags</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="Archives"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Archives</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="Search"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Search</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="About"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="http://stackoverflow.com/users"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Stack Overflow"
+                        >
+                        <i class="sidebar-button-icon fab fa-stack-overflow" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Stack Overflow</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://twitter.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Twitter"
+                        >
+                        <i class="sidebar-button-icon fab fa-twitter" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Twitter</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://facebook.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Facebook"
+                        >
+                        <i class="sidebar-button-icon fab fa-facebook" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Facebook</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://plus.google.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Google +"
+                        >
+                        <i class="sidebar-button-icon fab fa-google-plus" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Google +</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://www.linkedin.com/profile/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="LinkedIn"
+                        >
+                        <i class="sidebar-button-icon fab fa-linkedin" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">LinkedIn</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/mailto"
+                            
+                            rel="noopener"
+                            title="Mail"
+                        >
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/atom.xml"
+                            
+                            rel="noopener"
+                            title="RSS"
+                        >
+                        <i class="sidebar-button-icon fa fa-rss" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">RSS</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            cocoapods 新feature 开发 Example, On Demand Resource
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2020-03-19T20:21:19+08:00">
+	
+		    Mar 19, 2020
+    	
+    </time>
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p>2016年 苹果提出了On Demand Resource这一特性。目的在于下载游戏等资源减少包大小。<br>不过CocoaPods尚未对该特性进行支持，这导致我们不能在Pod中使用On Demand Resource。对于组件化开发的app来说，没有这一功能的支持，基本无法使用On Demand Resource。</p>
+<p>因此针对CocoaPods开发了在 podspec 中 定义 on_demand_resources 字段，支持pod仓库使用On Demand Resource。</p>
+<p>例如这样</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">s.on_demand_resources  = [<span class="string">"Fuck"</span>, <span class="string">"You"</span>]</span><br></pre></td></tr></table></figure>
+
+<h2 id="Feature-实现思路"><a href="#Feature-实现思路" class="headerlink" title="Feature 实现思路"></a>Feature 实现思路</h2><p>我们做的操作就是 用代码实现 在Xcode 中手动添加 On Demand Resource 的效果。</p>
+<ol>
+<li>拖一个文件进工程</li>
+<li>在Resource Tag 设置中添加该文件</li>
+</ol>
+<p>通过git diff, 我们可以发现对Xcode工程文件的改动在于：</p>
+<ol>
+<li>添加文件 PBXBuildFile PBXFileReference ，并打上tag</li>
+<li>新增 project 的 KnownAssetTags Attributed</li>
+<li>添加 该文件到 ResourcesBuildPhase</li>
+</ol>
+<p>我们只需要操作CocoaPods帮我们完成这些就搞定。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Begin PBXBuildFile section */</span></span><br><span class="line"><span class="number">569293632420B</span>FAA00E13D4A <span class="comment">/* R1 in Resources */</span> = &#123;isa = PBXBuildFile; fileRef = <span class="number">569293622420B</span>FAA00E13D4A <span class="comment">/* R1 */</span>; settings = &#123;ASSET_TAGS = (OnDemand, ); &#125;; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* Begin PBXFileReference section */</span></span><br><span class="line"><span class="number">569293622420B</span>FAA00E13D4A <span class="comment">/* R1 */</span> = &#123;isa = PBXFileReference; fileEncoding = <span class="number">4</span>; lastKnownFileType = <span class="built_in">text</span>; path = R1; sourceTree = <span class="string">"&lt;group&gt;"</span>; &#125;;</span><br><span class="line">A927A3B416DCDE828F76E9A4 <span class="comment">/* fuck */</span> = &#123;isa = PBXFileReference; includeInIndex = <span class="number">1</span>; lastKnownFileType = <span class="built_in">text</span>; name = fuck; path = <span class="string">"../../CocoaPodsTestLibrary-master/fuck"</span>; sourceTree = <span class="string">"&lt;group&gt;"</span>; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* Begin PBXProject section */</span></span><br><span class="line">	<span class="number">5692933E2420</span>BEDF00E13D4A <span class="comment">/* Project object */</span> = &#123;</span><br><span class="line">		isa = PBXProject;</span><br><span class="line">		attributes = &#123;</span><br><span class="line">			KnownAssetTags = (</span><br><span class="line">				OnDemand,</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="comment">/* Begin PBXResourcesBuildPhase section */</span></span><br><span class="line">	<span class="number">569293442420B</span>EDF00E13D4A <span class="comment">/* Resources */</span> = &#123;</span><br><span class="line">		isa = PBXResourcesBuildPhase;</span><br><span class="line">		buildActionMask = <span class="number">2147483647</span>;</span><br><span class="line">		files = (</span><br><span class="line">			<span class="number">569293632420B</span>FAA00E13D4A <span class="comment">/* R1 in Resources */</span>,</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><p>哈哈 像我这种Command Copy Paste 高手，做需求靠抄就行了。<br>首先确定要抄什么！ </p>
+<ul>
+<li>on_demand_resources 的 语法看起来和 resources 有点像。。 podspec 的 dsl 就抄他怎么实现的。抄他！</li>
+<li>文件添加到工程和 cocoapods将 xcconfig 添加到工程里比较像，抄他！！</li>
+<li>文件添加到build phase 并且打标签 和 添加资源文件比较像，抄他！！！</li>
+</ul>
+<p>一般iOS开发基本不会熟悉CocoaPods的源码，又是Ruby写的… 如何调试看一下我以前的文章。如何分析调试工程也参考我之前的文章。</p>
+<h3 id="新增Podspec-DSL"><a href="#新增Podspec-DSL" class="headerlink" title="新增Podspec DSL"></a>新增Podspec DSL</h3><p>我找了一个类似新增podspec语法的 pull request, 大致知道了新增语法该该什么。</p>
+<ol>
+<li>dsl.rb </li>
+<li>linter.rb </li>
+<li>specification.rb </li>
+</ol>
+<p>首先要定位到CocoaPods中对 podspec 的处理流程，我直接写个错误的语法，通过报错的调用栈定位到了位置。</p>
+<p>发现CocoaPods 将 Podspec中的内容 当作Ruby代码去执行 (ruby 的 eval)。知道了这个，就很容易摸清楚 podspec dsl 如何实现的了, 可以直接调试。通过调试，发现dsl的定义在 Core/lib/specification/dsl.rb中定义的。OK照葫芦画瓢，复制粘贴一下 resource 的 抄上…</p>
+<p>dsl 定义</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># @!method on_demand_resources=(on_demand_resources)</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   A list of on_demand_resources that should be copied into the target bundle.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   <span class="doctag">@example</span></span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#     spec.on_demand_resources = 'Resources/HockeySDK.bundle'</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   <span class="doctag">@example</span></span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#     spec.on_demand_resources = ['Images/*.png', 'Sounds/*']</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment">#   <span class="doctag">@param</span>  [String, Array&lt;String&gt;] resources</span></span><br><span class="line"><span class="comment">#           The on_demand_resources shipped with the Pod.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line">attribute <span class="symbol">:on_demand_resources</span>,</span><br><span class="line">          <span class="symbol">:container</span>     =&gt; Array,</span><br><span class="line">          <span class="symbol">:file_patterns</span> =&gt; <span class="literal">true</span>,</span><br><span class="line">          <span class="symbol">:singularize</span>   =&gt; <span class="literal">true</span></span><br></pre></td></tr></table></figure>
+
+<p>podspec 数据消费和lint</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># <span class="doctag">@return</span> [Array&lt;String&gt;] A hash where the key represents the</span></span><br><span class="line"><span class="comment">#         paths of the on_demand_resources to copy and the values the paths of</span></span><br><span class="line"><span class="comment">#         the on_demand_resources that should be copied.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line">spec_attr_accessor <span class="symbol">:on_demand_resources</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Performs validations related to the `on_demand_resources` attribute.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">_validate_on_demand_resources</span><span class="params">(on_demand_resource)</span></span></span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="添加-On-Demand-Resource-文件"><a href="#添加-On-Demand-Resource-文件" class="headerlink" title="添加 On Demand Resource 文件"></a>添加 On Demand Resource 文件</h3><p>哎，通过调试，找到了 cocoapods 集成Pods 到 Xcode Target 的关键文件。<code>lib/cocoapods/installer/user_project_integrator/target_integrator.rb</code>。 之后的操作又是通过调试和代码分析找到类似的功能如何实现，去理解CocoaPods的整个架构，再来实现我们的功能。<br>CocoaPods的设计确实十分优秀，改的很爽。</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Integrates the targets of the user projects with the on demand resources</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@return</span> [void]</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">add_on_demand_resources</span></span></span><br><span class="line">    attributes = target.user_project.root_object.attributes</span><br><span class="line">    asset_tags = (attributes[<span class="string">"KnownAssetTags"</span>] <span class="params">||</span>= [])</span><br><span class="line"></span><br><span class="line">    <span class="keyword">unless</span> asset_tags.<span class="keyword">include</span>?(<span class="string">"OnDemand"</span>)</span><br><span class="line">    asset_tags &lt;&lt; <span class="string">"OnDemand"</span></span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    attributes[<span class="string">"KnownAssetTags"</span>] = asset_tags</span><br><span class="line">    target.user_project.root_object.attributes = attributes</span><br><span class="line"></span><br><span class="line">    on_demand_resources_group = target.user_project.main_group[<span class="string">"on_demand_resources"</span>]</span><br><span class="line">    <span class="keyword">unless</span> on_demand_resources_group</span><br><span class="line">    on_demand_resources_group = target.user_project.main_group.new_group(<span class="string">"on_demand_resources"</span>, target.sandbox.root)</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    pb_target = target.user_project.objects_by_uuid[target.user_target_uuids[<span class="number">0</span>]]</span><br><span class="line"></span><br><span class="line">    old_on_demand_resource_file_refs = on_demand_resources_group.files</span><br><span class="line">    pb_target.remove_on_demand_resources(old_on_demand_resource_file_refs)</span><br><span class="line">    on_demand_resources_group.clear</span><br><span class="line"></span><br><span class="line">    on_demand_resource_file_refs = []</span><br><span class="line"></span><br><span class="line">    target.pod_targets.each <span class="keyword">do</span> <span class="params">|pod_target|</span></span><br><span class="line">    pod_target.file_accessors.each &#123;<span class="params">|file_accessor|</span></span><br><span class="line">        file_accessor.on_demand_resources.each &#123;<span class="params">|on_demand_resource|</span></span><br><span class="line">        on_demand_resource_pathname = Pathname.new(File.expand_path(on_demand_resource))</span><br><span class="line"></span><br><span class="line">        file_ref = on_demand_resources_group.files.find &#123;<span class="params">|file|</span> file.real_path == on_demand_resource_pathname&#125;</span><br><span class="line">        <span class="keyword">unless</span> file_ref</span><br><span class="line">            file_ref = on_demand_resources_group.new_file(on_demand_resource)</span><br><span class="line">            on_demand_resource_file_refs &lt;&lt; file_ref</span><br><span class="line">        <span class="keyword">end</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    pb_target.add_on_demand_resources(on_demand_resource_file_refs)</span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<p><code>lib/xcodeproj/project/object/native_target.rb</code></p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># remove on demand resource files to the resources build phase of the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@param</span>  [Array&lt;PBXFileReference&gt;] on_demand_resource_file_references</span></span><br><span class="line"><span class="comment">#         the files references of the on demand resources to the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@return</span> [void]</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">remove_on_demand_resources</span><span class="params">(on_demand_resource_file_references)</span></span></span><br><span class="line">    on_demand_resource_file_references.each <span class="keyword">do</span> <span class="params">|file|</span></span><br><span class="line">    resources_build_phase.remove_file_reference(file)</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Adds on demand resource files to the resources build phase of the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@param</span>  [Array&lt;PBXFileReference&gt;] on_demand_resource_file_references</span></span><br><span class="line"><span class="comment">#         the files references of the on demand resources to the target.</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># <span class="doctag">@return</span> [void]</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">add_on_demand_resources</span><span class="params">(on_demand_resource_file_references)</span></span></span><br><span class="line">    on_demand_resource_file_references.each <span class="keyword">do</span> <span class="params">|file|</span></span><br><span class="line">    <span class="keyword">next</span> <span class="keyword">if</span> resources_build_phase.<span class="keyword">include</span>?(file)</span><br><span class="line">    build_file = project.new(PBXBuildFile)</span><br><span class="line">    build_file.file_ref = file</span><br><span class="line">    build_file.settings = (build_file.settings <span class="params">||</span>= &#123;&#125;).merge(&#123;<span class="string">"ASSET_TAGS"</span> =&gt; [<span class="string">"OnDemand"</span>]&#125;)</span><br><span class="line">    resources_build_phase.files &lt;&lt; build_file</span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="分析阅读CocoaPods源码的几个关键名词"><a href="#分析阅读CocoaPods源码的几个关键名词" class="headerlink" title="分析阅读CocoaPods源码的几个关键名词"></a>分析阅读CocoaPods源码的几个关键名词</h3><p>PodTarget pod的target<br>AggregateTarget 需要集成pod的项目的target，例如我们app的target<br>Sandbox CocoaPods对于 我们Pods 和 工程的 沙盒文件处理<br>DSL podfile podspec中定义的语法<br>defind_method CocoaPods 通过动态生成方法的方式，处理简单的语法</p>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/03/25/DobbyRead/"
+                    data-tooltip="Dobby源码学习（一） Inline Hook"
+                    aria-label="PREVIOUS: Dobby源码学习（一） Inline Hook"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/03/04/lazybind/"
+                    data-tooltip="dyld(2) lazy bind 和 dyld_stub_binder"
+                    aria-label="NEXT: dyld(2) lazy bind 和 dyld_stub_binder"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Share this post"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2020/03/19/cocoapods-new-feature/"
+                    title="Share on Facebook"
+                    aria-label="Share on Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://yoursite.com/2020/03/19/cocoapods-new-feature/"
+                    title="Share on Twitter"
+                    aria-label="Share on Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://yoursite.com/2020/03/19/cocoapods-new-feature/"
+                    title="Share on Google+"
+                    aria-label="Share on Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 junyixie. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/03/25/DobbyRead/"
+                    data-tooltip="Dobby源码学习（一） Inline Hook"
+                    aria-label="PREVIOUS: Dobby源码学习（一） Inline Hook"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/03/04/lazybind/"
+                    data-tooltip="dyld(2) lazy bind 和 dyld_stub_binder"
+                    aria-label="NEXT: dyld(2) lazy bind 和 dyld_stub_binder"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Share this post"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2020/03/19/cocoapods-new-feature/"
+                    title="Share on Facebook"
+                    aria-label="Share on Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://yoursite.com/2020/03/19/cocoapods-new-feature/"
+                    title="Share on Twitter"
+                    aria-label="Share on Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://yoursite.com/2020/03/19/cocoapods-new-feature/"
+                    title="Share on Google+"
+                    aria-label="Share on Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2020/03/19/cocoapods-new-feature/"
+                        aria-label="Share on Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Share on Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://yoursite.com/2020/03/19/cocoapods-new-feature/"
+                        aria-label="Share on Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Share on Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://yoursite.com/2020/03/19/cocoapods-new-feature/"
+                        aria-label="Share on Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Share on Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <h4 id="about-card-name">junyixie</h4>
+        
+            <div id="about-card-bio"><p>author.bio</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>author.job</p>
+
+            </div>
+        
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('/assets/images/cover.jpg');"></div>
+        <!--SCRIPTS-->
+<script src="/assets/js/jquery.js"></script>
+<script src="/assets/js/jquery.fancybox.js"></script>
+<script src="/assets/js/thumbs.js"></script>
+<script src="/assets/js/tranquilpeak.js"></script>
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>

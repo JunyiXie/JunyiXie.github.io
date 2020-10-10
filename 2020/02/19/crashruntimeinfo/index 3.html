@@ -1,0 +1,667 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="xiejunyi Blog">
+    <title>Block ABI 文档阅读 - xiejunyi Blog</title>
+    <meta name="author" content="junyixie">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"junyixie","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"articleBody":"记得很久很久以前。。。有本iOS开发进阶的书籍讲了block实现。通过分析clang生成的代码来反推block的原理。卧槽最近搜了一下block，发现clang是有abi文档的。。。看了一下文档果然清晰许多。结合最近遇到的问题实践了一下block的知识。\nBlock ABI文档，详细的介绍了Block的构成及其内存管理相关的实现。参考这片文档。https://clang.llvm.org/docs/Block-ABI-Apple.html \nBlock数据结构通过这个数据结构，Block对外界变量的使用，Block内存管理，一目了然。\n123456789101112131415161718192021222324252627282930313233struct Block_literal_1 &#123;    void *isa; // initialized to &amp;_NSConcreteStackBlock or &amp;_NSConcreteGlobalBlock    int flags;    int reserved;    void (*invoke)(void *, ...);    struct Block_descriptor_1 &#123;    unsigned long int reserved;         // NULL        unsigned long int size;         // sizeof(struct Block_literal_1)        // optional helper functions        void (*copy_helper)(void *dst, void *src);     // IFF (1&lt;&lt;25)        void (*dispose_helper)(void *src);             // IFF (1&lt;&lt;25)        // required ABI.2010.3.16        const char *signature;                         // IFF (1&lt;&lt;30)    &#125; *descriptor;    // imported variables    // 引用    struct Block_byref_foo &#123;        void *isa;        struct _block_byref_foo *forwarding;        int flags;   //refcount;        int size;        // helper functions called via Block_copy() and Block_release()        void (*byref_keep)(void  *dst, void *src);        void (*byref_dispose)(void *);        typeof(marked_variable) marked_variable;    &#125; *byref_foo;    // 常量拷贝    const int x;    struct __block_literal_3 *const existingBlock;    ...&#125;;\n\n利用Block的布局定位Crash最近看同事解决一个crash, 挂在了_Block_release，并且没有相关的app调用栈。针对这种crash，如果不去拿到block的信息，是没法定位的。这个问题最后是通过手动复现+调试去解决的。\n1234Thread 0 Crashed:0   libobjc.A.dylib                 0x000000018879c140 _objc_release :16 (in libobjc.A.dylib)1   libsystem_blocks.dylib          0x000000018864da48 _Block_release :152 (in libsystem_blocks.dylib)2   libsystem_blocks.dylib          0x000000018864da48 _Block_release :152 (in libsystem_blocks.dylib)\n\n在crash崩溃的时候，其实是可以尝试对崩溃现场使用到的相关内存进行数据解析，获取有用的信息。kscrash 包含对对象的数据解析，但是并没有block。这片文章就看一下block的实现原理，然后进行解析。\n非常简单，block的函数实现地址 保存在了结构体内的 invoke 变量。取出地址，再符号化就可以对应出代码行了。\n1234567891011121314151617// 定义block结构，方便取值，这个参考ABI。typedef struct fake_block_literal &#123;    void *isa;     int flags;    int reserved;    void (*invoke)(struct fake_block_literal *); // 调用地址    struct fake_block_descriptor *descriptor;&#125; fake_block_literal;typedef struct fake_block_descriptor &#123;    unsigned long int reserved;    unsigned long int Block_size;    void (*copy_helper)(struct fake_block_literal *dst, struct fake_block_literal *src);    void (*dispose_helper)(struct fake_block_literal *);&#125; fake_block_descriptor;fake_block_literal *block_literal = (__bridge fake_block_literal *)address;\n\n结束语ARC,Block这种通过编译器和运行时一起完成的语言feature，通过编译器文档进行学习是快速理解原理的好办法。下周，看看ARC的实现。\n","dateCreated":"2020-02-19T20:59:13+08:00","dateModified":"2020-02-24T17:32:14+08:00","datePublished":"2020-02-19T20:59:13+08:00","description":"","headline":"Block ABI 文档阅读","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://yoursite.com/2020/02/19/crashruntimeinfo/"},"publisher":{"@type":"Organization","name":"junyixie","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"url":"http://yoursite.com/2020/02/19/crashruntimeinfo/"}</script>
+    <meta name="description" content="记得很久很久以前。。。有本iOS开发进阶的书籍讲了block实现。通过分析clang生成的代码来反推block的原理。卧槽最近搜了一下block，发现clang是有abi文档的。。。看了一下文档果然清晰许多。结合最近遇到的问题实践了一下block的知识。 Block ABI文档，详细的介绍了Block的构成及其内存管理相关的实现。参考这片文档。https:&#x2F;&#x2F;clang.llvm.org&#x2F;docs">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="Block ABI 文档阅读">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2020&#x2F;02&#x2F;19&#x2F;crashruntimeinfo&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="记得很久很久以前。。。有本iOS开发进阶的书籍讲了block实现。通过分析clang生成的代码来反推block的原理。卧槽最近搜了一下block，发现clang是有abi文档的。。。看了一下文档果然清晰许多。结合最近遇到的问题实践了一下block的知识。 Block ABI文档，详细的介绍了Block的构成及其内存管理相关的实现。参考这片文档。https:&#x2F;&#x2F;clang.llvm.org&#x2F;docs">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2020-02-24T09:32:14.743Z">
+<meta name="twitter:card" content="summary">
+    
+    
+        
+    
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/all.css">
+    <link rel="stylesheet" href="/assets/css/jquery.fancybox.css">
+    <link rel="stylesheet" href="/assets/css/thumbs.css">
+    <link rel="stylesheet" href="/assets/css/tranquilpeak.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            xiejunyi Blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="Open the link: /#about"
+            >
+        
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="Home"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="Categories"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Categories</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="Tags"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Tags</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="Archives"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Archives</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="Search"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Search</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="About"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="http://stackoverflow.com/users"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Stack Overflow"
+                        >
+                        <i class="sidebar-button-icon fab fa-stack-overflow" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Stack Overflow</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://twitter.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Twitter"
+                        >
+                        <i class="sidebar-button-icon fab fa-twitter" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Twitter</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://facebook.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Facebook"
+                        >
+                        <i class="sidebar-button-icon fab fa-facebook" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Facebook</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://plus.google.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Google +"
+                        >
+                        <i class="sidebar-button-icon fab fa-google-plus" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Google +</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://www.linkedin.com/profile/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="LinkedIn"
+                        >
+                        <i class="sidebar-button-icon fab fa-linkedin" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">LinkedIn</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/mailto"
+                            
+                            rel="noopener"
+                            title="Mail"
+                        >
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/atom.xml"
+                            
+                            rel="noopener"
+                            title="RSS"
+                        >
+                        <i class="sidebar-button-icon fa fa-rss" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">RSS</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            Block ABI 文档阅读
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2020-02-19T20:59:13+08:00">
+	
+		    Feb 19, 2020
+    	
+    </time>
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p>记得很久很久以前。。。有本iOS开发进阶的书籍讲了block实现。通过分析clang生成的代码来反推block的原理。<br>卧槽最近搜了一下block，发现clang是有abi文档的。。。看了一下文档果然清晰许多。结合最近遇到的问题实践了一下block的知识。</p>
+<p><strong>Block ABI文档，详细的介绍了Block的构成及其内存管理相关的实现。参考这片文档。</strong><br><a href="https://clang.llvm.org/docs/Block-ABI-Apple.html" target="_blank" rel="noopener">https://clang.llvm.org/docs/Block-ABI-Apple.html</a> </p>
+<h2 id="Block数据结构"><a href="#Block数据结构" class="headerlink" title="Block数据结构"></a>Block数据结构</h2><p>通过这个数据结构，Block对外界变量的使用，Block内存管理，一目了然。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">Block_literal_1</span> &#123;</span></span><br><span class="line">    <span class="keyword">void</span> *isa; <span class="comment">// initialized to &amp;_NSConcreteStackBlock or &amp;_NSConcreteGlobalBlock</span></span><br><span class="line">    <span class="keyword">int</span> flags;</span><br><span class="line">    <span class="keyword">int</span> reserved;</span><br><span class="line">    <span class="keyword">void</span> (*invoke)(<span class="keyword">void</span> *, ...);</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">Block_descriptor_1</span> &#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">int</span> reserved;         <span class="comment">// NULL</span></span><br><span class="line">        <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">int</span> <span class="built_in">size</span>;         <span class="comment">// sizeof(struct Block_literal_1)</span></span><br><span class="line">        <span class="comment">// optional helper functions</span></span><br><span class="line">        <span class="keyword">void</span> (*copy_helper)(<span class="keyword">void</span> *dst, <span class="keyword">void</span> *src);     <span class="comment">// IFF (1&lt;&lt;25)</span></span><br><span class="line">        <span class="keyword">void</span> (*dispose_helper)(<span class="keyword">void</span> *src);             <span class="comment">// IFF (1&lt;&lt;25)</span></span><br><span class="line">        <span class="comment">// required ABI.2010.3.16</span></span><br><span class="line">        <span class="keyword">const</span> <span class="keyword">char</span> *signature;                         <span class="comment">// IFF (1&lt;&lt;30)</span></span><br><span class="line">    &#125; *descriptor;</span><br><span class="line">    <span class="comment">// imported variables</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">// 引用</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">Block_byref_foo</span> &#123;</span></span><br><span class="line">        <span class="keyword">void</span> *isa;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> _<span class="title">block_byref_foo</span> *<span class="title">forwarding</span>;</span></span><br><span class="line">        <span class="keyword">int</span> flags;   <span class="comment">//refcount;</span></span><br><span class="line">        <span class="keyword">int</span> <span class="built_in">size</span>;</span><br><span class="line">        <span class="comment">// helper functions called via Block_copy() and Block_release()</span></span><br><span class="line">        <span class="keyword">void</span> (*byref_keep)(<span class="keyword">void</span>  *dst, <span class="keyword">void</span> *src);</span><br><span class="line">        <span class="keyword">void</span> (*byref_dispose)(<span class="keyword">void</span> *);</span><br><span class="line">        typeof(marked_variable) marked_variable;</span><br><span class="line">    &#125; *byref_foo;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 常量拷贝</span></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">int</span> x;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> __<span class="title">block_literal_3</span> *<span class="title">const</span> <span class="title">existingBlock</span>;</span></span><br><span class="line">    ...</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h2 id="利用Block的布局定位Crash"><a href="#利用Block的布局定位Crash" class="headerlink" title="利用Block的布局定位Crash"></a>利用Block的布局定位Crash</h2><p>最近看同事解决一个crash, 挂在了_Block_release，并且没有相关的app调用栈。针对这种crash，如果不去拿到block的信息，是没法定位的。这个问题最后是通过手动复现+调试去解决的。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Thread 0 Crashed:</span><br><span class="line">0   libobjc.A.dylib                 0x000000018879c140 _objc_release :16 (in libobjc.A.dylib)</span><br><span class="line">1   libsystem_blocks.dylib          0x000000018864da48 _Block_release :152 (in libsystem_blocks.dylib)</span><br><span class="line">2   libsystem_blocks.dylib          0x000000018864da48 _Block_release :152 (in libsystem_blocks.dylib)</span><br></pre></td></tr></table></figure>
+
+<p>在crash崩溃的时候，其实是可以尝试对崩溃现场使用到的相关内存进行数据解析，获取有用的信息。kscrash 包含对对象的数据解析，但是并没有block。这片文章就看一下block的实现原理，然后进行解析。</p>
+<p>非常简单，block的函数实现地址 保存在了结构体内的 invoke 变量。取出地址，再符号化就可以对应出代码行了。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 定义block结构，方便取值，这个参考ABI。</span></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">fake_block_literal</span> &#123;</span></span><br><span class="line">    <span class="keyword">void</span> *isa; </span><br><span class="line">    <span class="keyword">int</span> flags;</span><br><span class="line">    <span class="keyword">int</span> reserved;</span><br><span class="line">    <span class="keyword">void</span> (*invoke)(struct fake_block_literal *); <span class="comment">// 调用地址</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">fake_block_descriptor</span> *<span class="title">descriptor</span>;</span></span><br><span class="line">&#125; fake_block_literal;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">fake_block_descriptor</span> &#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">int</span> reserved;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">int</span> Block_size;</span><br><span class="line">    <span class="keyword">void</span> (*copy_helper)(struct fake_block_literal *dst, struct fake_block_literal *src);</span><br><span class="line">    <span class="keyword">void</span> (*dispose_helper)(struct fake_block_literal *);</span><br><span class="line">&#125; fake_block_descriptor;</span><br><span class="line"></span><br><span class="line">fake_block_literal *block_literal = (__bridge fake_block_literal *)address;</span><br></pre></td></tr></table></figure>
+
+<h2 id="结束语"><a href="#结束语" class="headerlink" title="结束语"></a>结束语</h2><p>ARC,Block这种通过编译器和运行时一起完成的语言feature，通过编译器文档进行学习是快速理解原理的好办法。<br>下周，看看ARC的实现。</p>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/03/03/macholinkedit/"
+                    data-tooltip="dyld(1) MachO Linkedit 段"
+                    aria-label="PREVIOUS: dyld(1) MachO Linkedit 段"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/02/12/iosdevdebug/"
+                    data-tooltip="iOS开发必备的问题定位调试技巧"
+                    aria-label="NEXT: iOS开发必备的问题定位调试技巧"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Share this post"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2020/02/19/crashruntimeinfo/"
+                    title="Share on Facebook"
+                    aria-label="Share on Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://yoursite.com/2020/02/19/crashruntimeinfo/"
+                    title="Share on Twitter"
+                    aria-label="Share on Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://yoursite.com/2020/02/19/crashruntimeinfo/"
+                    title="Share on Google+"
+                    aria-label="Share on Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 junyixie. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/03/03/macholinkedit/"
+                    data-tooltip="dyld(1) MachO Linkedit 段"
+                    aria-label="PREVIOUS: dyld(1) MachO Linkedit 段"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/02/12/iosdevdebug/"
+                    data-tooltip="iOS开发必备的问题定位调试技巧"
+                    aria-label="NEXT: iOS开发必备的问题定位调试技巧"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Share this post"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2020/02/19/crashruntimeinfo/"
+                    title="Share on Facebook"
+                    aria-label="Share on Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://yoursite.com/2020/02/19/crashruntimeinfo/"
+                    title="Share on Twitter"
+                    aria-label="Share on Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://yoursite.com/2020/02/19/crashruntimeinfo/"
+                    title="Share on Google+"
+                    aria-label="Share on Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2020/02/19/crashruntimeinfo/"
+                        aria-label="Share on Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Share on Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://yoursite.com/2020/02/19/crashruntimeinfo/"
+                        aria-label="Share on Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Share on Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://yoursite.com/2020/02/19/crashruntimeinfo/"
+                        aria-label="Share on Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Share on Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <h4 id="about-card-name">junyixie</h4>
+        
+            <div id="about-card-bio"><p>author.bio</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>author.job</p>
+
+            </div>
+        
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('/assets/images/cover.jpg');"></div>
+        <!--SCRIPTS-->
+<script src="/assets/js/jquery.js"></script>
+<script src="/assets/js/jquery.fancybox.js"></script>
+<script src="/assets/js/thumbs.js"></script>
+<script src="/assets/js/tranquilpeak.js"></script>
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>

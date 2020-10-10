@@ -1,0 +1,707 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="xiejunyi Blog">
+    <title>Cocoa 深入理解KVO - xiejunyi Blog</title>
+    <meta name="author" content="junyixie">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"junyixie","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"articleBody":"深入理解KVO……\n\n\nKVO的使用要实现will/didChangeValueForKey:方法\n被kvo的实例 实际上在运行时被调用\n12- (void)willChangeValueForKey:(NSString *)key;  - (void)didChangeValueForKey:(NSString *)key;\n触发\n1234- (void)observeValueForKeyPath:(NSString *)keyPath                        ofObject:(id)object                          change:(NSDictionary *)change                         context:(void *)context;\n因此要实现KVO,需要下列条件之一即可\n\n实现了KVC setValue:forKey:会调用 willChangeValueForKey,didChangeValueForKey\n有访问器方法(KVO后,会运行时重写setter方法,添加willChangeValueForKey,didChangeValueForKey)\n显示调用will/didChangeValueForKey:\n\n原理那系统是如何在框架层面支持 KVO的呢\n核心\n\nisa的改变\n动态创建子类\n替换重写setter方法\n重写class方法\n\n动态创建被观察对象的子类,重写setter方法,并且要管理一个对象的所有观察者.\n\n动态创建子类\n1234567891011121314151617181920// 子类名NSString *kvoclassName = [kXJYKVOPrefix stringByAppendingString:originalclassName];Class class = NSClassFromString(kvoclassName);if (class) &#123;return class;&#125;// class doesn't exist yet, make itClass originalclass = object_getClass(self);Class kvoclass = objc_allocateClassPair(originalclass, kvoclassName.UTF8String, 0);// 获得签名Method classMethod = class_getInstanceMethod(originalclass, @selector(class));const char *types = method_getTypeEncoding(classMethod);// 替换setter 实现class_addMethod(kvoClazz, @selector(class), (IMP)kvo_class, types);objc_registerClassPair(kvoclass);return kvoclass;\n\n改变isa指针\n\n\nisa指针的作用: isa指针指向实例的类(对于这里的情况，isa指针的内容请看我的另一片博客)实例通过isa指针找到类,可以得到方法列表，属性列表等信息当我们将isa指针指向子类时，就可以调用子类的方法，使用子类的属性等。于是，调用该实例的setter方法其实是调用了子类的setter方法。\n\n管理观察者由于一个对象可能被多个观察者观察,所以可以用关联对象的方法来管理所有的观察者。\n12345678XJYObservationInfo *info = [[XJYObservationInfo alloc]initWithObserver:self key:key block:block];// 维护改KVO观察者数组NSMutableArray *observers = objc_getAssociatedObject(self, (__bridge const void *)(kXJYKVOAssociatedObservers));if (!observers) &#123;observers = [NSMutableArray array];objc_setAssociatedObject(self, (__bridge const void *)(kXJYKVOAssociatedObservers), observers, OBJC_ASSOCIATION_RETAIN_NONATOMIC);&#125;[observers addObject:info];\n\n重写class方法\n12345class_addMethod(kvoClazz, @selector(class), (IMP)kvo_class, types);static Class kvo_class(id self, SEL _cmd)&#123;return class_getSuperclass(object_getClass(self));&#125;\n\n子类 setter 的实现在这个派生类中重写基类中任何被观察属性的 setter 方法。派生类在被重写的 setter 方法实现真正的通知机制，就如前面手动实现键值观察那样。\n\n\n额外扩充还记得Aspects中 对于KVO的特殊处理吗，KVO改变了实例对象的isa指针,在此处 Aspects对KVO过的实例进行了特殊的处理Aspects:\n1234// Probably a KVO'ed class. Swizzle in place. Also swizzle meta classes in place.else if (statedClass != baseClass) &#123;return aspect_swizzleClassInPlace(baseClass);&#125;\n\n1234object.class 由于KVO重写了class方法，所以不能准确的找到类object_getClass()方法可以准确的找到isa指针object.class 与 object_getClass(object)进行判断 来防止KVO导致的AOP无效\n\n\n","dateCreated":"2017-04-20T12:44:52+08:00","dateModified":"2018-05-26T19:27:59+08:00","datePublished":"2017-04-20T12:44:52+08:00","description":"深入理解KVO……","headline":"Cocoa 深入理解KVO","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/"},"publisher":{"@type":"Organization","name":"junyixie","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"url":"http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/"}</script>
+    <meta name="description" content="深入理解KVO……">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="Cocoa 深入理解KVO">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2017&#x2F;04&#x2F;20&#x2F;Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="深入理解KVO……">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2018-05-26T11:27:59.000Z">
+<meta name="twitter:card" content="summary">
+    
+    
+        
+    
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/all.css">
+    <link rel="stylesheet" href="/assets/css/jquery.fancybox.css">
+    <link rel="stylesheet" href="/assets/css/thumbs.css">
+    <link rel="stylesheet" href="/assets/css/tranquilpeak.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            xiejunyi Blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="Open the link: /#about"
+            >
+        
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="Home"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="Categories"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Categories</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="Tags"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Tags</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="Archives"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Archives</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="Search"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Search</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="About"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="http://stackoverflow.com/users"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Stack Overflow"
+                        >
+                        <i class="sidebar-button-icon fab fa-stack-overflow" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Stack Overflow</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://twitter.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Twitter"
+                        >
+                        <i class="sidebar-button-icon fab fa-twitter" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Twitter</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://facebook.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Facebook"
+                        >
+                        <i class="sidebar-button-icon fab fa-facebook" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Facebook</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://plus.google.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Google +"
+                        >
+                        <i class="sidebar-button-icon fab fa-google-plus" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Google +</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://www.linkedin.com/profile/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="LinkedIn"
+                        >
+                        <i class="sidebar-button-icon fab fa-linkedin" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">LinkedIn</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/mailto"
+                            
+                            rel="noopener"
+                            title="Mail"
+                        >
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/atom.xml"
+                            
+                            rel="noopener"
+                            title="RSS"
+                        >
+                        <i class="sidebar-button-icon fa fa-rss" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">RSS</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            Cocoa 深入理解KVO
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2017-04-20T12:44:52+08:00">
+	
+		    Apr 20, 2017
+    	
+    </time>
+    
+        <span>in </span>
+        
+    <a class="category-link" href="/categories/iOS/">iOS</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p>深入理解KVO<br>……</p>
+<a id="more"></a>
+
+<h3 id="KVO的使用"><a href="#KVO的使用" class="headerlink" title="KVO的使用"></a>KVO的使用</h3><p><strong>要实现will/didChangeValueForKey:方法</strong></p>
+<p>被kvo的实例 实际上在运行时被调用</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">- (<span class="keyword">void</span>)willChangeValueForKey:(<span class="built_in">NSString</span> *)key;  </span><br><span class="line">- (<span class="keyword">void</span>)didChangeValueForKey:(<span class="built_in">NSString</span> *)key;</span><br></pre></td></tr></table></figure>
+<p>触发</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">- (<span class="keyword">void</span>)observeValueForKeyPath:(<span class="built_in">NSString</span> *)keyPath  </span><br><span class="line">                      ofObject:(<span class="keyword">id</span>)object  </span><br><span class="line">                        change:(<span class="built_in">NSDictionary</span> *)change  </span><br><span class="line">                       context:(<span class="keyword">void</span> *)context;</span><br></pre></td></tr></table></figure>
+<p>因此要实现KVO,需要下列条件之一即可</p>
+<ol>
+<li>实现了KVC setValue:forKey:会调用 willChangeValueForKey,didChangeValueForKey</li>
+<li>有访问器方法(KVO后,会运行时重写setter方法,添加willChangeValueForKey,didChangeValueForKey)</li>
+<li>显示调用will/didChangeValueForKey:</li>
+</ol>
+<h3 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h3><p>那系统是如何在框架层面支持 KVO的呢</p>
+<p><strong>核心</strong></p>
+<ol>
+<li>isa的改变</li>
+<li>动态创建子类</li>
+<li>替换重写setter方法</li>
+<li>重写class方法</li>
+</ol>
+<p>动态创建被观察对象的子类,重写setter方法,并且要管理一个对象的所有观察者.</p>
+<ol>
+<li><p>动态创建子类</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 子类名</span></span><br><span class="line"><span class="built_in">NSString</span> *kvoclassName = [kXJYKVOPrefix stringByAppendingString:originalclassName];</span><br><span class="line">Class <span class="keyword">class</span> = <span class="built_in">NSClassFromString</span>(kvoclassName);</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (<span class="keyword">class</span>) &#123;</span><br><span class="line"><span class="keyword">return</span> <span class="keyword">class</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// class doesn't exist yet, make it</span></span><br><span class="line">Class originalclass = object_getClass(<span class="keyword">self</span>);</span><br><span class="line">Class kvoclass = objc_allocateClassPair(originalclass, kvoclassName.UTF8String, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 获得签名</span></span><br><span class="line">Method classMethod = class_getInstanceMethod(originalclass, <span class="keyword">@selector</span>(<span class="keyword">class</span>));</span><br><span class="line"><span class="keyword">const</span> <span class="keyword">char</span> *types = method_getTypeEncoding(classMethod);</span><br><span class="line"><span class="comment">// 替换setter 实现</span></span><br><span class="line">class_addMethod(kvoClazz, <span class="keyword">@selector</span>(<span class="keyword">class</span>), (IMP)kvo_class, types);</span><br><span class="line">objc_registerClassPair(kvoclass);</span><br><span class="line"></span><br><span class="line"><span class="keyword">return</span> kvoclass;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>改变isa指针</p>
+</li>
+</ol>
+<p><strong>isa指针的作用: isa指针指向实例的类(对于这里的情况，isa指针的内容请看我的另一片博客)</strong><br>实例通过isa指针找到类,可以得到方法列表，属性列表等信息<br>当我们将isa指针指向子类时，就可以调用子类的方法，使用子类的属性等。<br>于是，调用该实例的setter方法其实是调用了子类的setter方法。</p>
+<ol start="3">
+<li><p>管理观察者<br>由于一个对象可能被多个观察者观察,所以可以用关联对象的方法来管理所有的观察者。</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">XJYObservationInfo *info = [[XJYObservationInfo alloc]initWithObserver:<span class="keyword">self</span> key:key block:block];</span><br><span class="line"><span class="comment">// 维护改KVO观察者数组</span></span><br><span class="line"><span class="built_in">NSMutableArray</span> *observers = objc_getAssociatedObject(<span class="keyword">self</span>, (__bridge <span class="keyword">const</span> <span class="keyword">void</span> *)(kXJYKVOAssociatedObservers));</span><br><span class="line"><span class="keyword">if</span> (!observers) &#123;</span><br><span class="line">observers = [<span class="built_in">NSMutableArray</span> array];</span><br><span class="line">objc_setAssociatedObject(<span class="keyword">self</span>, (__bridge <span class="keyword">const</span> <span class="keyword">void</span> *)(kXJYKVOAssociatedObservers), observers, OBJC_ASSOCIATION_RETAIN_NONATOMIC);</span><br><span class="line">&#125;</span><br><span class="line">[observers addObject:info];</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>重写class方法</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">class_addMethod(kvoClazz, <span class="keyword">@selector</span>(<span class="keyword">class</span>), (IMP)kvo_class, types);</span><br><span class="line"><span class="keyword">static</span> Class kvo_class(<span class="keyword">id</span> <span class="keyword">self</span>, SEL _cmd)</span><br><span class="line">&#123;</span><br><span class="line"><span class="keyword">return</span> class_getSuperclass(object_getClass(<span class="keyword">self</span>));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>子类 setter 的实现<br>在这个派生类中重写基类中任何被观察属性的 setter 方法。<br>派生类在被重写的 setter 方法实现真正的通知机制，就如前面手动实现键值观察那样。</p>
+</li>
+</ol>
+<h3 id="额外扩充"><a href="#额外扩充" class="headerlink" title="额外扩充"></a>额外扩充</h3><p><strong>还记得Aspects中 对于KVO的特殊处理吗，KVO改变了实例对象的isa指针,在此处 Aspects对KVO过的实例进行了特殊的处理</strong><br>Aspects:</p>
+<figure class="highlight objectivec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Probably a KVO'ed class. Swizzle in place. Also swizzle meta classes in place.</span></span><br><span class="line"><span class="keyword">else</span> <span class="keyword">if</span> (statedClass != baseClass) &#123;</span><br><span class="line"><span class="keyword">return</span> aspect_swizzleClassInPlace(baseClass);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">object.class 由于KVO重写了class方法，所以不能准确的找到类</span><br><span class="line">object_getClass()方法可以准确的找到isa指针</span><br><span class="line"></span><br><span class="line">object.class 与 object_getClass(object)进行判断 来防止KVO导致的AOP无效</span><br></pre></td></tr></table></figure>
+
+
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/"
+                    data-tooltip="Objective-C 深入理解中的消息机制和方法调用"
+                    aria-label="PREVIOUS: Objective-C 深入理解中的消息机制和方法调用"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/"
+                    data-tooltip="理解 Objc Runtime"
+                    aria-label="NEXT: 理解 Objc Runtime"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Share this post"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/"
+                    title="Share on Facebook"
+                    aria-label="Share on Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/"
+                    title="Share on Twitter"
+                    aria-label="Share on Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/"
+                    title="Share on Google+"
+                    aria-label="Share on Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 junyixie. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2017/05/01/Objective-C-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3%E4%B8%AD%E7%9A%84%E6%B6%88%E6%81%AF%E6%9C%BA%E5%88%B6%E5%92%8C%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8/"
+                    data-tooltip="Objective-C 深入理解中的消息机制和方法调用"
+                    aria-label="PREVIOUS: Objective-C 深入理解中的消息机制和方法调用"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2017/02/06/%E6%B7%B1%E5%85%A5Objc-Runtime/"
+                    data-tooltip="理解 Objc Runtime"
+                    aria-label="NEXT: 理解 Objc Runtime"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Share this post"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/"
+                    title="Share on Facebook"
+                    aria-label="Share on Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/"
+                    title="Share on Twitter"
+                    aria-label="Share on Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/"
+                    title="Share on Google+"
+                    aria-label="Share on Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/"
+                        aria-label="Share on Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Share on Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/"
+                        aria-label="Share on Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Share on Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://yoursite.com/2017/04/20/Cocoa-%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3KVO/"
+                        aria-label="Share on Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Share on Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <h4 id="about-card-name">junyixie</h4>
+        
+            <div id="about-card-bio"><p>author.bio</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>author.job</p>
+
+            </div>
+        
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('/assets/images/cover.jpg');"></div>
+        <!--SCRIPTS-->
+<script src="/assets/js/jquery.js"></script>
+<script src="/assets/js/jquery.fancybox.js"></script>
+<script src="/assets/js/thumbs.js"></script>
+<script src="/assets/js/tranquilpeak.js"></script>
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>

@@ -1,0 +1,714 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="xiejunyi Blog">
+    <title>iOS OOM - xiejunyi Blog</title>
+    <meta name="author" content="junyixie">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"junyixie","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"articleBody":"最近在做oom,简单的总结下相关知识\nOut Of Memory 是 Jetsam同过响应压力通知杀掉优先级内消耗内存太多的进程, 导致应用闪退的一种现象，难于捕获和分析。\n技术点：1. iOS 内存分配系统的实现\n2. 如何抓到回调与如何监控\n3. 数据结构设计\n4. iOS abort机制\n5. OOM事件捕获iOS内存分配系统的实现（用户层级）iOS中，内存堆分配的基本控制者是 malloc_zone, 通常是default_zone. 实际上是一个 scallable zone. 我们的通过malloc 分配的内存都是 通过Zone中的空闲内存块链表中获取的. 实际上Zone 从VMPage获取4k对齐的内存(mvm_allocate_pages). 然后再分给我们小块的，效率高，我们通过malloc分配内存，就不必每次都需要申请vmpages. malloc 内存申请分为 tiny, small, large… \n虚拟内存分配相关的知识：vm_map, vm_map_entry, vm_object, vm_page, vm_object, vm_page对虚拟内存页面的调用都在bsd/kern/kern_mman.c中实现。\n物理内存: pmap…iOS abort 机制Pageout管理页面交换的策略，判断哪些页面需要写回到其后备存储。垃圾回收线程 (vm_pageout_grabage_collect())  调用 consider_pressure_events -&gt; vm_dispatch_memory_pressure() -&gt; BSD -&gt; NOTE_VM_PRESSURE-&gt; 响应压力通知如果进程并不是总能找到可以抛弃的内存，当这种协作方法失败时，Jetsam机制介入。\nJetsam通过响应压力通知杀掉优先级内消耗内存太多的进程。BSD层起了一个内核优先级最高的线程VM_memorystatus，这个线程会在维护两个列表，一个是我们之前提到的基于进程优先级的进程列表，还有一个是所谓的内存快照列表，即保存了每个进程消耗的内存页memorystatus_jetsam_snapshot。这个常驻线程接受从内核对于内存的守护程序pageout通过内核调用给每个App进程发送的内存压力通知，来处理事件，这个事件转发成上层的UI事件就是平常我们会收到的全局内存警告或者每个ViewController里面的didReceiveMemoryWarning。\n杀的类别读了一下源码，发现 杀的机制有如下两种，他们大致的执行流程如下\nhighwater 的处理 -&gt; 我们App占用的内存不要超过限制    1. 从优先级列表里循环寻找线程    2. 判断是否满足p_memstat_memlimit的限制条件    3. DiagnoseActive, FREEZE过滤    4. 杀进程，杀到了exit, 否则继续循环\nmemorystatus_act_aggressive处理 -&gt; 内存占用高按优先级杀    1. 根据policy加载 jld_bucket_count， 用来判断是否开杀    2. 从JETSAM_PRIORITY_ELEVATED_INACTIVE 开始杀    3. jld_bucket_count 和 memorystatus_jld_eval_period_msecs 判断是否开杀    4. 根据优先级从低向高杀，直到memorystatus_avail_pages_below_pressure\n触发入口123456789101112# static boolean_tmemorystatus_action_needed(void)&#123;#if CONFIG_EMBEDDED    return (is_reason_thrashing(kill_under_pressure_cause) ||            is_reason_zone_map_exhaustion(kill_under_pressure_cause) ||           memorystatus_available_pages &lt;= memorystatus_available_pages_pressure);#else /* CONFIG_EMBEDDED */    return (is_reason_thrashing(kill_under_pressure_cause) ||            is_reason_zone_map_exhaustion(kill_under_pressure_cause));#endif /* CONFIG_EMBEDDED */&#125;\n针对这种情况我们可以\nmemorystatus_action_needed 判断 -&gt; 规避Jetsam处理    1. 是否因为thrashing(如果是EMBEDED则不会触发这种情况)    2. 是否因为zone_map_exhaustion(判断Zone的消耗情况, vm_map 相关参数来做，感觉这个意义不大)    3. 是否因为memorystatus_available_pages &lt;= memorystatus_available_pages_pressure(是否是EMBEDDED)(根据物理内存page占比计算得到) -&gt; boot_arguments…能取到(外部拿不到，只能走内核调试拿.. )\nwatchdog为了避免应用陷入错误状态导致界面无响应，Apple 设计了看门狗 (WatchDog) 机制。一旦超时，强制杀死进程。在不同的生命周期，触发看门狗机制的超时时间有所不同：\n\n\n\n生命周期\n超时时间\n\n\n\n启动 Launch\n20 s\n\n\n恢复 Resume\n10 s\n\n\n悬挂 Suspend\n10 s\n\n\n退出 Quit\n6 s\n\n\n后台 Background\n10 min\n\n\n如何抓到回调与如何监控抓到：libmalloc 中的 malloc_logger 函数指针。通过这个可以抓到所有malloc类分配。vm 则可以根据hook或者私有变量，和 malloc_logger一致。\n监控: 每次抓到都获取调用栈，存储进自己定义的数据结构中。  这里为什么不会循环调用需要值得注意一下。是通过不同的逻辑分支，保证不会走到相同的带分配的逻辑分支。\n数据结构设计1. 空间占用\n2. 访问速度\n3. 细节存储优化OOM事件捕获\n现有方案，排除法\n存在的问题 applicationstate不准等\n经验值+ANR 优化\n\n","dateCreated":"2018-04-10T20:30:35+08:00","dateModified":"2019-11-26T23:31:18+08:00","datePublished":"2018-04-10T20:30:35+08:00","description":"","headline":"iOS OOM","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://yoursite.com/2018/04/10/iosoom/"},"publisher":{"@type":"Organization","name":"junyixie","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"url":"http://yoursite.com/2018/04/10/iosoom/"}</script>
+    <meta name="description" content="最近在做oom,简单的总结下相关知识 Out Of Memory 是 Jetsam同过响应压力通知杀掉优先级内消耗内存太多的进程, 导致应用闪退的一种现象，难于捕获和分析。 技术点：1. iOS 内存分配系统的实现 2. 如何抓到回调与如何监控 3. 数据结构设计 4. iOS abort机制 5. OOM事件捕获iOS内存分配系统的实现（用户层级）iOS中，内存堆分配的基本控制者是 malloc">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="iOS OOM">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2018&#x2F;04&#x2F;10&#x2F;iosoom&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="最近在做oom,简单的总结下相关知识 Out Of Memory 是 Jetsam同过响应压力通知杀掉优先级内消耗内存太多的进程, 导致应用闪退的一种现象，难于捕获和分析。 技术点：1. iOS 内存分配系统的实现 2. 如何抓到回调与如何监控 3. 数据结构设计 4. iOS abort机制 5. OOM事件捕获iOS内存分配系统的实现（用户层级）iOS中，内存堆分配的基本控制者是 malloc">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2019-11-26T15:31:18.858Z">
+<meta name="twitter:card" content="summary">
+    
+    
+        
+    
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/all.css">
+    <link rel="stylesheet" href="/assets/css/jquery.fancybox.css">
+    <link rel="stylesheet" href="/assets/css/thumbs.css">
+    <link rel="stylesheet" href="/assets/css/tranquilpeak.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            xiejunyi Blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="Open the link: /#about"
+            >
+        
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="Home"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="Categories"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Categories</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="Tags"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Tags</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="Archives"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Archives</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="Search"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Search</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="About"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="http://stackoverflow.com/users"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Stack Overflow"
+                        >
+                        <i class="sidebar-button-icon fab fa-stack-overflow" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Stack Overflow</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://twitter.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Twitter"
+                        >
+                        <i class="sidebar-button-icon fab fa-twitter" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Twitter</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://facebook.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Facebook"
+                        >
+                        <i class="sidebar-button-icon fab fa-facebook" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Facebook</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://plus.google.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Google +"
+                        >
+                        <i class="sidebar-button-icon fab fa-google-plus" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Google +</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://www.linkedin.com/profile/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="LinkedIn"
+                        >
+                        <i class="sidebar-button-icon fab fa-linkedin" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">LinkedIn</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/mailto"
+                            
+                            rel="noopener"
+                            title="Mail"
+                        >
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/atom.xml"
+                            
+                            rel="noopener"
+                            title="RSS"
+                        >
+                        <i class="sidebar-button-icon fa fa-rss" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">RSS</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            iOS OOM
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2018-04-10T20:30:35+08:00">
+	
+		    Apr 10, 2018
+    	
+    </time>
+    
+        <span>in </span>
+        
+    <a class="category-link" href="/categories/APM/">APM</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p>最近在做oom,简单的总结下相关知识</p>
+<p><strong>Out Of Memory 是 Jetsam同过响应压力通知杀掉优先级内消耗内存太多的进程, 导致应用闪退的一种现象，难于捕获和分析。</strong></p>
+<h2 id="技术点："><a href="#技术点：" class="headerlink" title="技术点："></a>技术点：</h2><pre><code>1. iOS 内存分配系统的实现
+2. 如何抓到回调与如何监控
+3. 数据结构设计
+4. iOS abort机制
+5. OOM事件捕获</code></pre><h2 id="iOS内存分配系统的实现（用户层级）"><a href="#iOS内存分配系统的实现（用户层级）" class="headerlink" title="iOS内存分配系统的实现（用户层级）"></a>iOS内存分配系统的实现（用户层级）</h2><p>iOS中，内存堆分配的基本控制者是 malloc_zone, 通常是default_zone. 实际上是一个 scallable zone. 我们的通过malloc 分配的内存都是 通过Zone中的空闲内存块链表中获取的. 实际上Zone 从VMPage获取4k对齐的内存(mvm_allocate_pages). 然后再分给我们小块的，效率高，我们通过malloc分配内存，就不必每次都需要申请vmpages. malloc 内存申请分为 tiny, small, large… </p>
+<h3 id="虚拟内存分配相关的知识："><a href="#虚拟内存分配相关的知识：" class="headerlink" title="虚拟内存分配相关的知识："></a>虚拟内存分配相关的知识：</h3><p>vm_map, vm_map_entry, vm_object, vm_page, vm_object, vm_page<br>对虚拟内存页面的调用都在bsd/kern/kern_mman.c中实现。</p>
+<h3 id="物理内存-pmap…"><a href="#物理内存-pmap…" class="headerlink" title="物理内存: pmap…"></a>物理内存: pmap…</h3><h2 id="iOS-abort-机制"><a href="#iOS-abort-机制" class="headerlink" title="iOS abort 机制"></a>iOS abort 机制</h2><h3 id="Pageout"><a href="#Pageout" class="headerlink" title="Pageout"></a>Pageout</h3><p>管理页面交换的策略，判断哪些页面需要写回到其后备存储。<br>垃圾回收线程 (vm_pageout_grabage_collect())  调用 consider_pressure_events -&gt; vm_dispatch_memory_pressure() -&gt; BSD -&gt; NOTE_VM_PRESSURE-&gt; 响应压力通知<br>如果进程并不是总能找到可以抛弃的内存，当这种协作方法失败时，Jetsam机制介入。</p>
+<h3 id="Jetsam"><a href="#Jetsam" class="headerlink" title="Jetsam"></a>Jetsam</h3><p>通过响应压力通知杀掉优先级内消耗内存太多的进程。<br>BSD层起了一个内核优先级最高的线程VM_memorystatus，这个线程会在维护两个列表，一个是我们之前提到的基于进程优先级的进程列表，还有一个是所谓的内存快照列表，即保存了每个进程消耗的内存页memorystatus_jetsam_snapshot。<br>这个常驻线程接受从内核对于内存的守护程序pageout通过内核调用给每个App进程发送的内存压力通知，来处理事件，这个事件转发成上层的UI事件就是平常我们会收到的全局内存警告或者每个ViewController里面的didReceiveMemoryWarning。</p>
+<h4 id="杀的类别"><a href="#杀的类别" class="headerlink" title="杀的类别"></a>杀的类别</h4><p>读了一下源码，发现 杀的机制有如下两种，他们大致的执行流程如下</p>
+<p><strong>highwater 的处理 -&gt; 我们App占用的内存不要超过限制</strong><br>    1. 从优先级列表里循环寻找线程<br>    2. 判断是否满足p_memstat_memlimit的限制条件<br>    3. DiagnoseActive, FREEZE过滤<br>    4. 杀进程，杀到了exit, 否则继续循环</p>
+<p><strong>memorystatus_act_aggressive处理 -&gt; 内存占用高按优先级杀</strong><br>    1. 根据policy加载 jld_bucket_count， 用来判断是否开杀<br>    2. 从JETSAM_PRIORITY_ELEVATED_INACTIVE 开始杀<br>    3. jld_bucket_count 和 memorystatus_jld_eval_period_msecs 判断是否开杀<br>    4. 根据优先级从低向高杀，直到memorystatus_avail_pages_below_pressure</p>
+<h4 id="触发入口"><a href="#触发入口" class="headerlink" title="触发入口"></a>触发入口</h4><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta"># static boolean_t</span></span><br><span class="line">memorystatus_action_needed(<span class="keyword">void</span>)</span><br><span class="line">&#123;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">if</span> CONFIG_EMBEDDED</span></span><br><span class="line">    <span class="keyword">return</span> (is_reason_thrashing(kill_under_pressure_cause) ||</span><br><span class="line">            is_reason_zone_map_exhaustion(kill_under_pressure_cause) ||</span><br><span class="line">           memorystatus_available_pages &lt;= memorystatus_available_pages_pressure);</span><br><span class="line"><span class="meta">#<span class="meta-keyword">else</span> <span class="comment">/* CONFIG_EMBEDDED */</span></span></span><br><span class="line">    <span class="keyword">return</span> (is_reason_thrashing(kill_under_pressure_cause) ||</span><br><span class="line">            is_reason_zone_map_exhaustion(kill_under_pressure_cause));</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span> <span class="comment">/* CONFIG_EMBEDDED */</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><strong>针对这种情况我们可以</strong></p>
+<p>memorystatus_action_needed 判断 -&gt; 规避Jetsam处理<br>    1. 是否因为thrashing(如果是EMBEDED则不会触发这种情况)<br>    2. 是否因为zone_map_exhaustion(判断Zone的消耗情况, vm_map 相关参数来做，感觉这个意义不大)<br>    3. 是否因为memorystatus_available_pages &lt;= memorystatus_available_pages_pressure(是否是EMBEDDED)(根据物理内存page占比计算得到) -&gt; boot_arguments…能取到(外部拿不到，只能走内核调试拿.. )</p>
+<h3 id="watchdog"><a href="#watchdog" class="headerlink" title="watchdog"></a>watchdog</h3><p>为了避免应用陷入错误状态导致界面无响应，Apple 设计了看门狗 (WatchDog) 机制。一旦超时，强制杀死进程。在不同的生命周期，触发看门狗机制的超时时间有所不同：</p>
+<table>
+<thead>
+<tr>
+<th>生命周期</th>
+<th>超时时间</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>启动 Launch</td>
+<td>20 s</td>
+</tr>
+<tr>
+<td>恢复 Resume</td>
+<td>10 s</td>
+</tr>
+<tr>
+<td>悬挂 Suspend</td>
+<td>10 s</td>
+</tr>
+<tr>
+<td>退出 Quit</td>
+<td>6 s</td>
+</tr>
+<tr>
+<td>后台 Background</td>
+<td>10 min</td>
+</tr>
+</tbody></table>
+<h3 id="如何抓到回调与如何监控"><a href="#如何抓到回调与如何监控" class="headerlink" title="如何抓到回调与如何监控"></a>如何抓到回调与如何监控</h3><p><strong>抓到</strong>：libmalloc 中的 malloc_logger 函数指针。通过这个可以抓到所有malloc类分配。<br>vm 则可以根据hook或者私有变量，和 malloc_logger一致。</p>
+<p><strong>监控</strong>: 每次抓到都获取调用栈，存储进自己定义的数据结构中。  这里为什么不会循环调用需要值得注意一下。是通过不同的逻辑分支，保证不会走到相同的带分配的逻辑分支。</p>
+<h3 id="数据结构设计"><a href="#数据结构设计" class="headerlink" title="数据结构设计"></a>数据结构设计</h3><pre><code>1. 空间占用
+2. 访问速度
+3. 细节存储优化</code></pre><h3 id="OOM事件捕获"><a href="#OOM事件捕获" class="headerlink" title="OOM事件捕获"></a>OOM事件捕获</h3><ol>
+<li>现有方案，排除法</li>
+<li>存在的问题 applicationstate不准等</li>
+<li>经验值+ANR 优化</li>
+</ol>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2018/04/13/dependency/"
+                    data-tooltip="关于架构和编码的思考"
+                    aria-label="PREVIOUS: 关于架构和编码的思考"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2018/01/15/sharedlibraryandpic/"
+                    data-tooltip="fishhook与共享库和PIC"
+                    aria-label="NEXT: fishhook与共享库和PIC"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Share this post"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2018/04/10/iosoom/"
+                    title="Share on Facebook"
+                    aria-label="Share on Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://yoursite.com/2018/04/10/iosoom/"
+                    title="Share on Twitter"
+                    aria-label="Share on Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://yoursite.com/2018/04/10/iosoom/"
+                    title="Share on Google+"
+                    aria-label="Share on Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 junyixie. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2018/04/13/dependency/"
+                    data-tooltip="关于架构和编码的思考"
+                    aria-label="PREVIOUS: 关于架构和编码的思考"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2018/01/15/sharedlibraryandpic/"
+                    data-tooltip="fishhook与共享库和PIC"
+                    aria-label="NEXT: fishhook与共享库和PIC"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Share this post"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2018/04/10/iosoom/"
+                    title="Share on Facebook"
+                    aria-label="Share on Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://yoursite.com/2018/04/10/iosoom/"
+                    title="Share on Twitter"
+                    aria-label="Share on Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://yoursite.com/2018/04/10/iosoom/"
+                    title="Share on Google+"
+                    aria-label="Share on Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2018/04/10/iosoom/"
+                        aria-label="Share on Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Share on Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://yoursite.com/2018/04/10/iosoom/"
+                        aria-label="Share on Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Share on Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://yoursite.com/2018/04/10/iosoom/"
+                        aria-label="Share on Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Share on Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <h4 id="about-card-name">junyixie</h4>
+        
+            <div id="about-card-bio"><p>author.bio</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>author.job</p>
+
+            </div>
+        
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('/assets/images/cover.jpg');"></div>
+        <!--SCRIPTS-->
+<script src="/assets/js/jquery.js"></script>
+<script src="/assets/js/jquery.fancybox.js"></script>
+<script src="/assets/js/thumbs.js"></script>
+<script src="/assets/js/tranquilpeak.js"></script>
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>

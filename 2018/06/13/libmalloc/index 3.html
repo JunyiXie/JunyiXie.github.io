@@ -1,0 +1,692 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="xiejunyi Blog">
+    <title>libmalloc &#34;malloc&#34; 探究 - xiejunyi Blog</title>
+    <meta name="author" content="junyixie">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"junyixie","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"articleBody":"之前腾讯开源了 OOMDetector 用于监控内存分配，在集成到我司项目时, 修复了一些bug崩溃，优化了性能，在内存不是频繁分配的App上是有用武之地的。\nOOMDetector 监控内存分配的核心处理 是通过 libmalloc库 中的 malloc_logger 指针实现的。\n我之前一直疑惑 OOMDetector 的监控方式是否能够完善的监控到应用层面的&quot;malloc&quot;内存分配。这就有必要探究下应用层的内存分配API\niOS “malloc” 内存分配iOS上都通过kernel进行内存分配，将虚拟内存页映射到应用内存空间上。我们在应用层可以通过mmap实现这种内存分配。\n不过大多数情况下我们都通过“malloc”进行内存分配, 我们可以使用malloc来获取内存，而不用每次都请求vmpage映射。而malloc分配的内存实质上都是从vmpage映射获取的。\n你一定注意到了 “malloc”, 是的，它代表calloc, realloc, valloc, malloc_zone_malloc, malloc_zone_calloc, malloc_zone_valloc, malloc_zone_realloc, malloc_zone_batch_malloc 等方法，本质上他们的分配都应该被归于一类，都是利用 scalable_zone 进行分配的。\n顺便提一下，C++ new的分配 其实现也是用 libc 中的 malloc 进行分配的new_opnt.cc\nlibmalloc 分析default_zone本着质疑的精神，一般我是不会相信空口无凭的文章的，因此，可以从libmalloc中找到答案。\n首先找到 malloc, calloc等函数.. 的实现，因为原理类似，就不一一举出。\n123456789101112131415161718192021void *malloc(size_t size)&#123;\tvoid *retval;\tretval = malloc_zone_malloc(default_zone, size);\tif (retval == NULL) &#123;\t\terrno = ENOMEM;\t&#125;\treturn retval;&#125;void *calloc(size_t num_items, size_t size)&#123;\tvoid *retval;\tretval = malloc_zone_calloc(default_zone, num_items, size);\tif (retval == NULL) &#123;\t\terrno = ENOMEM;\t&#125;\treturn retval;&#125;\n\n首先来看看这个 default_zone 是什么东西, 代码如下\n123456789101112131415161718192021222324252627282930313233343536373839404142typedef struct &#123;\tmalloc_zone_t malloc_zone;\tuint8_t pad[PAGE_MAX_SIZE - sizeof(malloc_zone_t)];&#125; virtual_default_zone_t;static virtual_default_zone_t virtual_default_zone__attribute__((section(\"__DATA,__v_zone\")))__attribute__((aligned(PAGE_MAX_SIZE))) = &#123;\tNULL,\tNULL,\tdefault_zone_size,\tdefault_zone_malloc,\tdefault_zone_calloc,\tdefault_zone_valloc,\tdefault_zone_free,\tdefault_zone_realloc,\tdefault_zone_destroy,\tDEFAULT_MALLOC_ZONE_STRING,\tdefault_zone_batch_malloc,\tdefault_zone_batch_free,\t&amp;default_zone_introspect,\t9,\tdefault_zone_memalign,\tdefault_zone_free_definite_size,\tdefault_zone_pressure_relief&#125;;static malloc_zone_t *default_zone = &amp;virtual_default_zone.malloc_zone;static void *default_zone_malloc(malloc_zone_t *zone, size_t size)&#123;\tzone = runtime_default_zone();\t\treturn zone-&gt;malloc(zone, size);&#125;MALLOC_ALWAYS_INLINEstatic inline malloc_zone_t *runtime_default_zone() &#123;\treturn (lite_zone) ? lite_zone : inline_malloc_default_zone();&#125;\n\n可以看到 default_zone 通过这种方式来初始化\n1234567static inline malloc_zone_t *inline_malloc_default_zone(void)&#123;\t_malloc_initialize_once();\t// _malloc_printf(ASL_LEVEL_INFO, \"In inline_malloc_default_zone with %d %d\\n\", malloc_num_zones, malloc_has_debug_zone);\treturn malloc_zones[0];&#125;\n\n随后的调用如下_malloc_initialize -&gt; create_scalable_zone -&gt; create_scalable_szone 最终我们创建了 szone_t 类型的对象，通过类型转换，得到了我们的 default_zone。\n1234malloc_zone_t *create_scalable_zone(size_t initial_size, unsigned debug_flags) &#123;\treturn (malloc_zone_t *) create_scalable_szone(initial_size, debug_flags);&#125;\n\n\n“malloc”上文代码段中写道malloc 中调用了 malloc_zone_malloc, 看看malloc_zone_malloc 的实现是什么\n1234567891011121314151617181920212223void *malloc_zone_malloc(malloc_zone_t *zone, size_t size)&#123;\tMALLOC_TRACE(TRACE_malloc | DBG_FUNC_START, (uintptr_t)zone, size, 0, 0);\tvoid *ptr;\tif (malloc_check_start &amp;&amp; (malloc_check_counter++ &gt;= malloc_check_start)) &#123;\t\tinternal_check();\t&#125;\tif (size &gt; MALLOC_ABSOLUTE_MAX_SIZE) &#123;\t\treturn NULL;\t&#125;\tptr = zone-&gt;malloc(zone, size);\t\t// if lite zone is passed in then we still call the lite methods\t\tif (malloc_logger) &#123;\t\tmalloc_logger(MALLOC_LOG_TYPE_ALLOCATE | MALLOC_LOG_TYPE_HAS_ZONE, (uintptr_t)zone, (uintptr_t)size, 0, (uintptr_t)ptr, 0);\t&#125;\tMALLOC_TRACE(TRACE_malloc | DBG_FUNC_END, (uintptr_t)zone, size, (uintptr_t)ptr, 0);\treturn ptr;&#125;\n\n其分配实现是 zone-&gt;malloc 根据之前的分析，就是szone_t结构体对象中对应的malloc实现。\n在创建szone之后，做了一系列如下的初始化操作。\n1234567891011121314151617// Initialize the security token.szone-&gt;cookie = (uintptr_t)malloc_entropy[0];szone-&gt;basic_zone.version = 9;szone-&gt;basic_zone.size = (void *)szone_size;szone-&gt;basic_zone.malloc = (void *)szone_malloc;szone-&gt;basic_zone.calloc = (void *)szone_calloc;szone-&gt;basic_zone.valloc = (void *)szone_valloc;szone-&gt;basic_zone.free = (void *)szone_free;szone-&gt;basic_zone.realloc = (void *)szone_realloc;szone-&gt;basic_zone.destroy = (void *)szone_destroy;szone-&gt;basic_zone.batch_malloc = (void *)szone_batch_malloc;szone-&gt;basic_zone.batch_free = (void *)szone_batch_free;szone-&gt;basic_zone.introspect = (struct malloc_introspection_t *)&amp;szone_introspect;szone-&gt;basic_zone.memalign = (void *)szone_memalign;szone-&gt;basic_zone.free_definite_size = (void *)szone_free_definite_size;szone-&gt;basic_zone.pressure_relief = (void *)szone_pressure_relief;\n\n在magazine_malloc.c有着对应的实现。\nmalloc_loggermalloc_logger 在 libmalloc 中的以下方法内被调用 malloc_zone_malloc malloc_zone_calloc malloc_zone_valloc malloc_zone_realloc malloc_zone_free malloc_zone_free_definite_size malloc_zone_memalign 等函数中被调用，我们 “malloc” 系列的方法都会调用到这些函数 \n如果你使用 malloc_logger 回调，那么 “malloc” 分配你都可以监控到. OOMDetector 中也针对不同的分配做了不同的处理。因此使用malloc_logger回调是可以监控到 “malloc”分配的，验证了文章开头的猜测。\n总结以malloc_logger为线索，探究了一下libmalloc的源码，确定了OOMDetector的原理。当然最重要的是建立对 iOS 内存分配的整体理解。 本文只写了对”malloc”内存分配的理解，以后有时间，会写一下 XNU内存管理相关的文章。\n","dateCreated":"2018-06-13T20:52:38+08:00","dateModified":"2019-11-26T23:32:26+08:00","datePublished":"2018-06-13T20:52:38+08:00","description":"","headline":"libmalloc \"malloc\" 探究","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://yoursite.com/2018/06/13/libmalloc/"},"publisher":{"@type":"Organization","name":"junyixie","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"url":"http://yoursite.com/2018/06/13/libmalloc/"}</script>
+    <meta name="description" content="之前腾讯开源了 OOMDetector 用于监控内存分配，在集成到我司项目时, 修复了一些bug崩溃，优化了性能，在内存不是频繁分配的App上是有用武之地的。 OOMDetector 监控内存分配的核心处理 是通过 libmalloc库 中的 malloc_logger 指针实现的。 我之前一直疑惑 OOMDetector 的监控方式是否能够完善的监控到应用层面的&amp;quot;malloc&amp;quot">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="libmalloc &quot;malloc&quot; 探究">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2018&#x2F;06&#x2F;13&#x2F;libmalloc&#x2F;index.html">
+<meta property="og:site_name" content="xiejunyi Blog">
+<meta property="og:description" content="之前腾讯开源了 OOMDetector 用于监控内存分配，在集成到我司项目时, 修复了一些bug崩溃，优化了性能，在内存不是频繁分配的App上是有用武之地的。 OOMDetector 监控内存分配的核心处理 是通过 libmalloc库 中的 malloc_logger 指针实现的。 我之前一直疑惑 OOMDetector 的监控方式是否能够完善的监控到应用层面的&amp;quot;malloc&amp;quot">
+<meta property="og:locale" content="en">
+<meta property="og:updated_time" content="2019-11-26T15:32:26.119Z">
+<meta name="twitter:card" content="summary">
+    
+    
+        
+    
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/all.css">
+    <link rel="stylesheet" href="/assets/css/jquery.fancybox.css">
+    <link rel="stylesheet" href="/assets/css/thumbs.css">
+    <link rel="stylesheet" href="/assets/css/tranquilpeak.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            xiejunyi Blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="Open the link: /#about"
+            >
+        
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="Home"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="Categories"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Categories</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="Tags"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Tags</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="Archives"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Archives</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="Search"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Search</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="About"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="http://stackoverflow.com/users"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Stack Overflow"
+                        >
+                        <i class="sidebar-button-icon fab fa-stack-overflow" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Stack Overflow</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://twitter.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Twitter"
+                        >
+                        <i class="sidebar-button-icon fab fa-twitter" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Twitter</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://facebook.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Facebook"
+                        >
+                        <i class="sidebar-button-icon fab fa-facebook" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Facebook</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://plus.google.com/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="Google +"
+                        >
+                        <i class="sidebar-button-icon fab fa-google-plus" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Google +</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://www.linkedin.com/profile/"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="LinkedIn"
+                        >
+                        <i class="sidebar-button-icon fab fa-linkedin" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">LinkedIn</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/mailto"
+                            
+                            rel="noopener"
+                            title="Mail"
+                        >
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/atom.xml"
+                            
+                            rel="noopener"
+                            title="RSS"
+                        >
+                        <i class="sidebar-button-icon fa fa-rss" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">RSS</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            libmalloc &#34;malloc&#34; 探究
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2018-06-13T20:52:38+08:00">
+	
+		    Jun 13, 2018
+    	
+    </time>
+    
+        <span>in </span>
+        
+    <a class="category-link" href="/categories/APM/">APM</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p>之前腾讯开源了 <a href="https://github.com/Tencent/OOMDetector" target="_blank" rel="noopener">OOMDetector</a> 用于监控内存分配，在集成到我司项目时, 修复了一些bug崩溃，优化了性能，在内存不是频繁分配的App上是有用武之地的。</p>
+<p>OOMDetector 监控内存分配的核心处理 是通过 libmalloc库 中的 malloc_logger 指针实现的。</p>
+<p>我之前一直疑惑 OOMDetector 的监控方式是否能够完善的监控到应用层面的<code>&quot;malloc&quot;</code>内存分配。这就有必要探究下应用层的内存分配API</p>
+<h2 id="iOS-“malloc”-内存分配"><a href="#iOS-“malloc”-内存分配" class="headerlink" title="iOS “malloc” 内存分配"></a>iOS “malloc” 内存分配</h2><p>iOS上都通过kernel进行内存分配，将虚拟内存页映射到应用内存空间上。我们在应用层可以通过mmap实现这种内存分配。</p>
+<p>不过大多数情况下我们都通过<strong>“malloc”</strong>进行内存分配, 我们可以使用malloc来获取内存，而不用每次都请求vmpage映射。而malloc分配的内存实质上都是从vmpage映射获取的。</p>
+<p>你一定注意到了 <strong>“malloc”</strong>, 是的，它代表calloc, realloc, valloc, malloc_zone_malloc, malloc_zone_calloc, malloc_zone_valloc, malloc_zone_realloc, malloc_zone_batch_malloc 等方法，本质上他们的分配都应该被归于一类，都是利用 <code>scalable_zone</code> 进行分配的。</p>
+<p>顺便提一下，C++ new的分配 其实现也是用 libc 中的 malloc 进行分配的<br><a href="http://gcc.gnu.org/viewcvs/gcc/trunk/libstdc++-v3/libsupc++/new_opnt.cc?view=markup" target="_blank" rel="noopener">new_opnt.cc</a></p>
+<h3 id="libmalloc-分析"><a href="#libmalloc-分析" class="headerlink" title="libmalloc 分析"></a>libmalloc 分析</h3><h3 id="default-zone"><a href="#default-zone" class="headerlink" title="default_zone"></a>default_zone</h3><p>本着质疑的精神，一般我是不会相信空口无凭的文章的，因此，可以从<code>libmalloc</code>中找到答案。</p>
+<p>首先找到 malloc, calloc等函数.. 的实现，因为原理类似，就不一一举出。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span> *</span><br><span class="line"><span class="built_in">malloc</span>(<span class="keyword">size_t</span> <span class="built_in">size</span>)</span><br><span class="line">&#123;</span><br><span class="line">	<span class="keyword">void</span> *retval;</span><br><span class="line">	retval = malloc_zone_malloc(default_zone, <span class="built_in">size</span>);</span><br><span class="line">	<span class="keyword">if</span> (retval == <span class="literal">NULL</span>) &#123;</span><br><span class="line">		errno = ENOMEM;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> retval;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">void</span> *</span><br><span class="line"><span class="built_in">calloc</span>(<span class="keyword">size_t</span> num_items, <span class="keyword">size_t</span> <span class="built_in">size</span>)</span><br><span class="line">&#123;</span><br><span class="line">	<span class="keyword">void</span> *retval;</span><br><span class="line">	retval = malloc_zone_calloc(default_zone, num_items, <span class="built_in">size</span>);</span><br><span class="line">	<span class="keyword">if</span> (retval == <span class="literal">NULL</span>) &#123;</span><br><span class="line">		errno = ENOMEM;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> retval;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>首先来看看这个 <code>default_zone</code> 是什么东西, 代码如下</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">	<span class="keyword">malloc_zone_t</span> malloc_zone;</span><br><span class="line">	<span class="keyword">uint8_t</span> pad[PAGE_MAX_SIZE - <span class="keyword">sizeof</span>(<span class="keyword">malloc_zone_t</span>)];</span><br><span class="line">&#125; <span class="keyword">virtual_default_zone_t</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">virtual_default_zone_t</span> virtual_default_zone</span><br><span class="line">__attribute__((section(<span class="string">"__DATA,__v_zone"</span>)))</span><br><span class="line">__attribute__((aligned(PAGE_MAX_SIZE))) = &#123;</span><br><span class="line">	<span class="literal">NULL</span>,</span><br><span class="line">	<span class="literal">NULL</span>,</span><br><span class="line">	default_zone_size,</span><br><span class="line">	default_zone_malloc,</span><br><span class="line">	default_zone_calloc,</span><br><span class="line">	default_zone_valloc,</span><br><span class="line">	default_zone_free,</span><br><span class="line">	default_zone_realloc,</span><br><span class="line">	default_zone_destroy,</span><br><span class="line">	DEFAULT_MALLOC_ZONE_STRING,</span><br><span class="line">	default_zone_batch_malloc,</span><br><span class="line">	default_zone_batch_free,</span><br><span class="line">	&amp;default_zone_introspect,</span><br><span class="line">	<span class="number">9</span>,</span><br><span class="line">	default_zone_memalign,</span><br><span class="line">	default_zone_free_definite_size,</span><br><span class="line">	default_zone_pressure_relief</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">malloc_zone_t</span> *default_zone = &amp;virtual_default_zone.malloc_zone;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> *</span><br><span class="line">default_zone_malloc(<span class="keyword">malloc_zone_t</span> *zone, <span class="keyword">size_t</span> <span class="built_in">size</span>)</span><br><span class="line">&#123;</span><br><span class="line">	zone = runtime_default_zone();</span><br><span class="line">	</span><br><span class="line">	<span class="keyword">return</span> zone-&gt;<span class="built_in">malloc</span>(zone, <span class="built_in">size</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">MALLOC_ALWAYS_INLINE</span><br><span class="line"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">malloc_zone_t</span> *</span><br><span class="line">runtime_default_zone() &#123;</span><br><span class="line">	<span class="keyword">return</span> (lite_zone) ? lite_zone : inline_malloc_default_zone();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看到 <code>default_zone</code> 通过这种方式来初始化</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">malloc_zone_t</span> *</span><br><span class="line">inline_malloc_default_zone(<span class="keyword">void</span>)</span><br><span class="line">&#123;</span><br><span class="line">	_malloc_initialize_once();</span><br><span class="line">	<span class="comment">// _malloc_printf(ASL_LEVEL_INFO, "In inline_malloc_default_zone with %d %d\n", malloc_num_zones, malloc_has_debug_zone);</span></span><br><span class="line">	<span class="keyword">return</span> malloc_zones[<span class="number">0</span>];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>随后的调用如下</strong><br><code>_malloc_initialize</code> -&gt; <code>create_scalable_zone</code> -&gt; <code>create_scalable_szone</code> 最终我们创建了 szone_t 类型的对象，通过类型转换，得到了我们的 default_zone。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">malloc_zone_t</span> *</span><br><span class="line">create_scalable_zone(<span class="keyword">size_t</span> initial_size, <span class="keyword">unsigned</span> debug_flags) &#123;</span><br><span class="line">	<span class="keyword">return</span> (<span class="keyword">malloc_zone_t</span> *) create_scalable_szone(initial_size, debug_flags);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<h3 id="“malloc”"><a href="#“malloc”" class="headerlink" title="“malloc”"></a>“malloc”</h3><p>上文代码段中写道<code>malloc</code> 中调用了 <code>malloc_zone_malloc</code>, 看看malloc_zone_malloc 的实现是什么</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span> *</span><br><span class="line">malloc_zone_malloc(<span class="keyword">malloc_zone_t</span> *zone, <span class="keyword">size_t</span> <span class="built_in">size</span>)</span><br><span class="line">&#123;</span><br><span class="line">	MALLOC_TRACE(TRACE_malloc | DBG_FUNC_START, (<span class="keyword">uintptr_t</span>)zone, <span class="built_in">size</span>, <span class="number">0</span>, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">void</span> *ptr;</span><br><span class="line">	<span class="keyword">if</span> (malloc_check_start &amp;&amp; (malloc_check_counter++ &gt;= malloc_check_start)) &#123;</span><br><span class="line">		internal_check();</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> (<span class="built_in">size</span> &gt; MALLOC_ABSOLUTE_MAX_SIZE) &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	ptr = zone-&gt;<span class="built_in">malloc</span>(zone, <span class="built_in">size</span>);		<span class="comment">// if lite zone is passed in then we still call the lite methods</span></span><br><span class="line"></span><br><span class="line">	</span><br><span class="line">	<span class="keyword">if</span> (malloc_logger) &#123;</span><br><span class="line">		malloc_logger(MALLOC_LOG_TYPE_ALLOCATE | MALLOC_LOG_TYPE_HAS_ZONE, (<span class="keyword">uintptr_t</span>)zone, (<span class="keyword">uintptr_t</span>)<span class="built_in">size</span>, <span class="number">0</span>, (<span class="keyword">uintptr_t</span>)ptr, <span class="number">0</span>);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	MALLOC_TRACE(TRACE_malloc | DBG_FUNC_END, (<span class="keyword">uintptr_t</span>)zone, <span class="built_in">size</span>, (<span class="keyword">uintptr_t</span>)ptr, <span class="number">0</span>);</span><br><span class="line">	<span class="keyword">return</span> ptr;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其分配实现是 <code>zone-&gt;malloc</code> 根据之前的分析，就是szone_t结构体对象中对应的malloc实现。</p>
+<p>在创建szone之后，做了一系列如下的初始化操作。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Initialize the security token.</span></span><br><span class="line">szone-&gt;cookie = (<span class="keyword">uintptr_t</span>)malloc_entropy[<span class="number">0</span>];</span><br><span class="line"></span><br><span class="line">szone-&gt;basic_zone.version = <span class="number">9</span>;</span><br><span class="line">szone-&gt;basic_zone.<span class="built_in">size</span> = (<span class="keyword">void</span> *)szone_size;</span><br><span class="line">szone-&gt;basic_zone.<span class="built_in">malloc</span> = (<span class="keyword">void</span> *)szone_malloc;</span><br><span class="line">szone-&gt;basic_zone.<span class="built_in">calloc</span> = (<span class="keyword">void</span> *)szone_calloc;</span><br><span class="line">szone-&gt;basic_zone.valloc = (<span class="keyword">void</span> *)szone_valloc;</span><br><span class="line">szone-&gt;basic_zone.<span class="built_in">free</span> = (<span class="keyword">void</span> *)szone_free;</span><br><span class="line">szone-&gt;basic_zone.<span class="built_in">realloc</span> = (<span class="keyword">void</span> *)szone_realloc;</span><br><span class="line">szone-&gt;basic_zone.destroy = (<span class="keyword">void</span> *)szone_destroy;</span><br><span class="line">szone-&gt;basic_zone.batch_malloc = (<span class="keyword">void</span> *)szone_batch_malloc;</span><br><span class="line">szone-&gt;basic_zone.batch_free = (<span class="keyword">void</span> *)szone_batch_free;</span><br><span class="line">szone-&gt;basic_zone.introspect = (struct <span class="keyword">malloc_introspection_t</span> *)&amp;szone_introspect;</span><br><span class="line">szone-&gt;basic_zone.memalign = (<span class="keyword">void</span> *)szone_memalign;</span><br><span class="line">szone-&gt;basic_zone.free_definite_size = (<span class="keyword">void</span> *)szone_free_definite_size;</span><br><span class="line">szone-&gt;basic_zone.pressure_relief = (<span class="keyword">void</span> *)szone_pressure_relief;</span><br></pre></td></tr></table></figure>
+
+<p>在magazine_malloc.c有着对应的实现。</p>
+<h3 id="malloc-logger"><a href="#malloc-logger" class="headerlink" title="malloc_logger"></a>malloc_logger</h3><p>malloc_logger 在 libmalloc 中的以下方法内被调用 <code>malloc_zone_malloc</code> <code>malloc_zone_calloc</code> <code>malloc_zone_valloc</code> <code>malloc_zone_realloc</code> <code>malloc_zone_free</code> <code>malloc_zone_free_definite_size</code> <code>malloc_zone_memalign</code> 等函数中被调用，我们 “malloc” 系列的方法都会调用到这些函数 </p>
+<p>如果你使用 malloc_logger 回调，那么 “malloc” 分配你都可以监控到. OOMDetector 中也针对不同的分配做了不同的处理。因此使用malloc_logger回调是可以监控到 “malloc”分配的，验证了文章开头的猜测。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>以malloc_logger为线索，探究了一下libmalloc的源码，确定了OOMDetector的原理。当然最重要的是建立对 iOS 内存分配的整体理解。 本文只写了对”malloc”内存分配的理解，以后有时间，会写一下 XNU内存管理相关的文章。</p>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2018/09/16/CrashSymbolicateSystemDesign/"
+                    data-tooltip="APM Crash系统"
+                    aria-label="PREVIOUS: APM Crash系统"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2018/04/13/dependency/"
+                    data-tooltip="关于架构和编码的思考"
+                    aria-label="NEXT: 关于架构和编码的思考"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Share this post"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2018/06/13/libmalloc/"
+                    title="Share on Facebook"
+                    aria-label="Share on Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://yoursite.com/2018/06/13/libmalloc/"
+                    title="Share on Twitter"
+                    aria-label="Share on Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://yoursite.com/2018/06/13/libmalloc/"
+                    title="Share on Google+"
+                    aria-label="Share on Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 junyixie. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2018/09/16/CrashSymbolicateSystemDesign/"
+                    data-tooltip="APM Crash系统"
+                    aria-label="PREVIOUS: APM Crash系统"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2018/04/13/dependency/"
+                    data-tooltip="关于架构和编码的思考"
+                    aria-label="NEXT: 关于架构和编码的思考"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Share this post"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2018/06/13/libmalloc/"
+                    title="Share on Facebook"
+                    aria-label="Share on Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://yoursite.com/2018/06/13/libmalloc/"
+                    title="Share on Twitter"
+                    aria-label="Share on Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://yoursite.com/2018/06/13/libmalloc/"
+                    title="Share on Google+"
+                    aria-label="Share on Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2018/06/13/libmalloc/"
+                        aria-label="Share on Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Share on Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://yoursite.com/2018/06/13/libmalloc/"
+                        aria-label="Share on Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Share on Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://yoursite.com/2018/06/13/libmalloc/"
+                        aria-label="Share on Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Share on Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <h4 id="about-card-name">junyixie</h4>
+        
+            <div id="about-card-bio"><p>author.bio</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>author.job</p>
+
+            </div>
+        
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('/assets/images/cover.jpg');"></div>
+        <!--SCRIPTS-->
+<script src="/assets/js/jquery.js"></script>
+<script src="/assets/js/jquery.fancybox.js"></script>
+<script src="/assets/js/thumbs.js"></script>
+<script src="/assets/js/tranquilpeak.js"></script>
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>
