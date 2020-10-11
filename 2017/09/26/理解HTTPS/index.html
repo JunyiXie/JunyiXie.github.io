@@ -13,7 +13,7 @@
 </ol>
 <h2 id="HTTPS-简介"><a href="#HTTPS-简介" class="headerlink" title="HTTPS 简介"></a>HTTPS 简介</h2><p>超文本传输安全协议（英语：Hypertext Transfer Protocol Secure，缩写：HTTPS，常称为HTTP over TLS，HTTP over SSL或HTTP Secure）是一种通过计算机网络进行安全通信的传输协议。HTTPS经由HTTP进行通信，但利用SSL/TLS来加密数据包。HTTPS开发的主要目的，是提供对网站服务器的身份认证，保护交换数据的隐私与完整性。这个协议由网景公司（Netscape）在1994年首次提出，随后扩展到互联网上。</p>
 <blockquote>
-<p><a href="https://zh.wikipedia.org/zh-cn/超文本传输安全协议" target="_blank" rel="noopener">wikipedia https</a><br>简单的图示<br><img src="https://github.com/JunyiXie/JunyiXie.github.io/raw/master/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/https.png" alt="HTTPS"></p>
+<p><a target="_blank" rel="noopener" href="https://zh.wikipedia.org/zh-cn/超文本传输安全协议">wikipedia https</a><br>简单的图示<br><img src="https://github.com/JunyiXie/JunyiXie.github.io/raw/master/2017/09/26/%E7%90%86%E8%A7%A3HTTPS/https.png" alt="HTTPS"></p>
 </blockquote>
 <p><strong>HTTP+加密+认证+完整性保护 = HTTPS.</strong><br> 通常，http直接和tcp通信。当使用ssl/tls时，则演变成先和ssl/tls通信，再由ssl/tls和tcp通讯，因此，https其实就是身披ssl/tls保护外衣的http.</p>
 <p> <strong>HTTPS 四次握手的过程</strong></p>
@@ -93,7 +93,7 @@
 </ul>
 <p> <strong>数字证书</strong><br> 数字证书简称CA，它由权威机构给某网站颁发的一种认可凭证，这个凭证是被大家（浏览器）所认可的<br> <strong>为什么需要数字证书？</strong><br> 避免他人冒充服务器</p>
 <blockquote>
-<p><a href="https://zh.wikipedia.org/wiki/中间人攻击" target="_blank" rel="noopener">中间人攻击</a></p>
+<p><a target="_blank" rel="noopener" href="https://zh.wikipedia.org/wiki/中间人攻击">中间人攻击</a></p>
 </blockquote>
 <p> 数字证书一般由证书认证机构颁发，证书里面包含了真实服务器的public-key和网站的其他信息，数字证书机构用自己的private-key加密后发给浏览器，浏览器使用数字证书机构的publick-key揭秘后得到真实服务器的publick-key。</p>
 <p><strong>为什么一定要用三个随机数，来生成”会话密钥”</strong></p>
@@ -109,7 +109,7 @@
 </li>
 <li><p>D是最后HTTP使用的密钥</p>
 <blockquote>
-<p>参考文章<br>•    SSL/TLS协议运行机制的概述 <a href="http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html" target="_blank" rel="noopener">http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html</a><br>•    图解SSL <a href="http://www.ruanyifeng.com/blog/2014/09/illustration-ssl.html" target="_blank" rel="noopener">http://www.ruanyifeng.com/blog/2014/09/illustration-ssl.html</a><br>•    数字证书 <a href="https://blog.cnbluebox.com/blog/2014/03/24/shu-zi-zheng-shu/" target="_blank" rel="noopener">https://blog.cnbluebox.com/blog/2014/03/24/shu-zi-zheng-shu/</a><br>•    数字证书原理 <a href="http://blog.sae.sina.com.cn/archives/4939" target="_blank" rel="noopener">http://blog.sae.sina.com.cn/archives/4939</a><br>•    图解HTTPS <a href="http://www.jianshu.com/p/51cc23843756" target="_blank" rel="noopener">http://www.jianshu.com/p/51cc23843756</a></p>
+<p>参考文章<br>•    SSL/TLS协议运行机制的概述 <a target="_blank" rel="noopener" href="http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html">http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html</a><br>•    图解SSL <a target="_blank" rel="noopener" href="http://www.ruanyifeng.com/blog/2014/09/illustration-ssl.html">http://www.ruanyifeng.com/blog/2014/09/illustration-ssl.html</a><br>•    数字证书 <a target="_blank" rel="noopener" href="https://blog.cnbluebox.com/blog/2014/03/24/shu-zi-zheng-shu/">https://blog.cnbluebox.com/blog/2014/03/24/shu-zi-zheng-shu/</a><br>•    数字证书原理 <a target="_blank" rel="noopener" href="http://blog.sae.sina.com.cn/archives/4939">http://blog.sae.sina.com.cn/archives/4939</a><br>•    图解HTTPS <a target="_blank" rel="noopener" href="http://www.jianshu.com/p/51cc23843756">http://www.jianshu.com/p/51cc23843756</a></p>
 </blockquote>
 </li>
 </ol>
