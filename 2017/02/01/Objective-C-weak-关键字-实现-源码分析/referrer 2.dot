@@ -1,0 +1,9 @@
+digraph referrer {
+    referent -> object[shape = box]
+    referrer -> referent
+    referrer2 -> referent
+    
+    entry -> {referrer,referrer2}
+
+    
+}
